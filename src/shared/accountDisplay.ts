@@ -1,5 +1,7 @@
-export function accountTitle(a: { label: string; email: string; username: string }): string {
-  return a.label.trim() || a.email.trim() || a.username.trim() || '未命名账号'
+import { accountIdentityTitle } from './identity'
+
+export function accountTitle(a: { label: string; email: string; username: string; platform?: string }): string {
+  return accountIdentityTitle(a)
 }
 
 /** Milder mask: keep up to 4 local chars so temp-mail accounts stay recognizable. */

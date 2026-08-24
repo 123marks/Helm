@@ -5,17 +5,21 @@ import {
   CheckCircle2,
   ChevronRight,
   Fingerprint,
+  Gauge,
   ShieldCheck,
   Users,
   XCircle
 } from 'lucide-react'
 import type { Platform } from '@shared/types'
+import { hasQuota } from '@shared/platformFlags'
+import { accountUsage } from '@shared/quotaSummary'
 import { useAccountsStore } from '@renderer/store/accounts'
 import { useTasksStore } from '@renderer/store/tasks'
 import { useAppStore } from '@renderer/store/app'
 import { useSecurityStore } from '@renderer/store/security'
 import { PlatformGlyph } from '@renderer/components/PlatformBadge'
 import { ScoreRing } from '@renderer/components/ScoreRing'
+import { StatCard } from '@renderer/components/StatCard'
 import { Donut, DonutLegend, MiniBars, type BarPoint, type DonutSegment } from '@renderer/components/charts'
 import { TaskStatusBadge } from '@renderer/components/status'
 import { platformMeta, PLATFORMS } from '@renderer/lib/platforms'
@@ -24,32 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/u
 import { Progress } from '@renderer/components/ui/progress'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState } from '@renderer/components/ui/empty-state'
-
-function StatCard({
-  label,
-  value,
-  icon,
-  tint
-}: {
-  label: string
-  value: number | string
-  icon: React.ReactNode
-  tint: string
-}): React.JSX.Element {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-5">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: tint }}>
-          {icon}
-        </div>
-        <div>
-          <div className="text-2xl font-bold tabular-nums">{value}</div>
-          <div className="text-xs text-muted-foreground">{label}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
 function Coverage({
   label,
@@ -134,13 +112,55 @@ export default function Dashboard(): React.JSX.Element {
   const withProxy = accounts.filter((a) => a.proxyUrl).length
   const withIdentity = accounts.filter((a) => a.userAgent || a.locale || a.timezone).length
 
+  const quota = (() => {
+    const rows = accounts.filter((a) => hasQuota(a.platform)).map((a) => accountUsage(a))
+    const scored = rows.map((u) => u.peak ?? u.percent).filter((p): p is number => p != null)
+    return {
+      tracked: rows.length,
+      alerts: rows.filter((u) => u.state === 'warn' || u.state === 'critical').length,
+      average: scored.length ? scored.reduce((s, p) => s + p, 0) / scored.length : null
+    }
+  })()
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="账号总数" value={accounts.length} icon={<Users className="h-6 w-6 text-primary" />} tint="hsl(var(--primary) / 0.15)" />
-        <StatCard label="进行中任务" value={active} icon={<Activity className="h-6 w-6 text-warning" />} tint="hsl(var(--warning) / 0.15)" />
-        <StatCard label="成功任务" value={success} icon={<CheckCircle2 className="h-6 w-6 text-success" />} tint="hsl(var(--success) / 0.15)" />
-        <StatCard label="失败任务" value={failed} icon={<XCircle className="h-6 w-6 text-destructive" />} tint="hsl(var(--destructive) / 0.15)" />
+        <StatCard
+          label="账号总数"
+          value={accounts.length}
+          sub={quota.tracked > 0 ? `${quota.tracked} 个带订阅额度` : undefined}
+          icon={<Users className="h-5 w-5 text-primary" />}
+          tone="hsl(var(--primary) / 0.15)"
+          onClick={() => setPage('accounts')}
+        />
+        <StatCard
+          label="额度告警"
+          value={quota.alerts}
+          sub={quota.average == null ? '还没有额度数据' : `平均用量 ${Math.round(quota.average)}%`}
+          icon={<Gauge className="h-5 w-5 text-warning" />}
+          tone="hsl(var(--warning) / 0.15)"
+          onClick={() => setPage('cockpit')}
+        />
+        <StatCard
+          label="进行中任务"
+          value={active}
+          icon={<Activity className="h-5 w-5 text-warning" />}
+          tone="hsl(var(--warning) / 0.15)"
+        />
+        <StatCard
+          label="任务成败"
+          value={`${success} / ${failed}`}
+          sub="成功 / 失败"
+          icon={
+            failed > 0 ? (
+              <XCircle className="h-5 w-5 text-destructive" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-success" />
+            )
+          }
+          tone={failed > 0 ? 'hsl(var(--destructive) / 0.15)' : 'hsl(var(--success) / 0.15)'}
+          onClick={() => setPage('automation')}
+        />
       </div>
 
       <button

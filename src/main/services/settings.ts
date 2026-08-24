@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cdpEndpoint: 'http://127.0.0.1:9222',
   language: 'zh',
   theme: 'dark',
+  showQuotaHints: true,
+  quotaAutoRefreshMinutes: 30,
   slowMo: 50,
   skipUpdateVersion: ''
 }
@@ -41,6 +43,14 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
   if (clean.maxConcurrency !== undefined)
     clean.maxConcurrency = clampInt(clean.maxConcurrency, 1, 10, DEFAULT_SETTINGS.maxConcurrency)
   if (clean.slowMo !== undefined) clean.slowMo = clampInt(clean.slowMo, 0, 5000, DEFAULT_SETTINGS.slowMo)
+  if (clean.quotaAutoRefreshMinutes !== undefined) {
+    clean.quotaAutoRefreshMinutes = clampInt(
+      clean.quotaAutoRefreshMinutes,
+      0,
+      1440,
+      DEFAULT_SETTINGS.quotaAutoRefreshMinutes
+    )
+  }
 
   const stmt = getDb().prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'

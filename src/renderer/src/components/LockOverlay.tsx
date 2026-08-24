@@ -42,7 +42,7 @@ export function LockOverlay(): React.JSX.Element | null {
           <div className="mt-1 flex items-center gap-1.5 text-base font-semibold">
             <LockKeyhole className="h-4 w-4 text-primary" /> 已锁定
           </div>
-          <p className="text-xs text-muted-foreground">输入 PIN 解锁 AI Account Manager</p>
+          <p className="text-xs text-muted-foreground">输入 PIN 解锁 Helm</p>
         </div>
         <Input
           type="password"

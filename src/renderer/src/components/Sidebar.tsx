@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { Bot, KeyRound, LayoutDashboard, Plug, ScrollText, Settings, Shield, Users } from 'lucide-react'
+import {
+  Bot,
+  Gauge,
+  KeyRound,
+  LayoutDashboard,
+  Plug,
+  ScrollText,
+  Settings,
+  Shield,
+  Users
+} from 'lucide-react'
 import type { UpdateStatus } from '@shared/types'
 import { useAppStore, type Page } from '@renderer/store/app'
 import { api } from '@renderer/lib/api'
@@ -8,6 +18,7 @@ import { cn } from '@renderer/lib/utils'
 
 const NAV: { key: Page; label: string; icon: typeof Users }[] = [
   { key: 'dashboard', label: '仪表盘', icon: LayoutDashboard },
+  { key: 'cockpit', label: '额度总览', icon: Gauge },
   { key: 'accounts', label: '账号管理', icon: Users },
   { key: 'security', label: '安全中心', icon: Shield },
   { key: '2fa', label: '2FA 中心', icon: KeyRound },
@@ -41,8 +52,8 @@ export function Sidebar(): React.JSX.Element {
       <div className="flex items-center gap-2.5 px-5 py-5">
         <Logo size={38} className="rounded-[11px] shadow-sm" />
         <div className="leading-tight">
-          <div className="text-sm font-semibold">AI Account Manager</div>
-          <div className="text-[11px] text-muted-foreground">多平台账号安全中枢</div>
+          <div className="text-sm font-semibold">Helm</div>
+          <div className="text-[11px] text-muted-foreground">AI 订阅账号驾驶舱</div>
         </div>
       </div>
 

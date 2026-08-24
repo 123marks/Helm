@@ -97,7 +97,7 @@ git push origin main --tags
 2. 或终端清除隔离属性后正常双击：
 
 ```bash
-xattr -cr "/Applications/AI Account Manager.app"
+xattr -cr "/Applications/Helm.app"
 ```
 
 **Linux**：AppImage 首次 `chmod +x` 后直接运行；deb 用 `sudo dpkg -i` 安装即可，无额外签名要求。

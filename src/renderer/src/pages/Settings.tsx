@@ -367,6 +367,47 @@ export default function SettingsPage(): React.JSX.Element | null {
               </SelectContent>
             </Select>
           </div>
+          <div className="mt-4 flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <Label>显示额度说明</Label>
+              <p className="text-xs text-muted-foreground">
+                额度条下方显示套餐介绍（如「官方免费档」「套餐内 7771 / 40000 ¢」）。账号页工具栏也可切换。
+              </p>
+            </div>
+            <Switch
+              checked={form.showQuotaHints !== false}
+              onCheckedChange={(v) => {
+                set({ showQuotaHints: v })
+                void saveSettings({ showQuotaHints: v })
+              }}
+            />
+          </div>
+          <div className="mt-4 flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <Label>后台自动刷新额度</Label>
+              <p className="text-xs text-muted-foreground">
+                新授权的账号会立即拉一次额度；之后按这个间隔轮询过期的账号，限速执行避免风控。
+              </p>
+            </div>
+            <Select
+              value={String(form.quotaAutoRefreshMinutes ?? 30)}
+              onValueChange={(v) => {
+                set({ quotaAutoRefreshMinutes: Number(v) })
+                void saveSettings({ quotaAutoRefreshMinutes: Number(v) })
+              }}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">关闭</SelectItem>
+                <SelectItem value="15">每 15 分钟</SelectItem>
+                <SelectItem value="30">每 30 分钟</SelectItem>
+                <SelectItem value="60">每小时</SelectItem>
+                <SelectItem value="360">每 6 小时</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 

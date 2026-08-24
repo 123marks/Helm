@@ -7,6 +7,7 @@ import {
   writeProfileCookies
 } from '../automation/browser'
 import { getAccount, revealSecrets, updateAccount } from '../db/repositories/accounts'
+import { enrichAccountIdentity, lookupCursorIdentity } from './identity'
 
 type CookieIn = {
   name: string
@@ -101,6 +102,13 @@ export function cookiesFromAccount(
       cookie('__Secure-next-auth.session-token', token, '.openai.com')
     ]
   }
+  if (platform === 'grok') {
+    if (!token || token.startsWith('xai-') || token.startsWith('{')) return []
+    return [
+      cookie('sAccessToken', token, '.grok.com', { httpOnly: false }),
+      cookie('sAccessToken', token, '.x.ai', { httpOnly: false })
+    ]
+  }
   return []
 }
 
@@ -176,6 +184,16 @@ export async function captureSessionFromProfile(accountId: string): Promise<Acco
       custom.sessionToken = cur.cookieValue
       changed = true
     }
+    if (cur) {
+      const id = await lookupCursorIdentity(cur.cookieValue)
+      if (id.email && id.email !== acc.email) {
+        patch.email = id.email
+        if (!acc.label || acc.label === 'cursor' || /授权中$/.test(acc.label)) patch.label = id.email
+        if (!acc.username || acc.username === 'cursor') patch.username = id.username || id.email.split('@')[0]
+        changed = true
+      }
+      if (id.loginMethod && id.loginMethod !== acc.oauthProvider) patch.oauthProvider = id.loginMethod
+    }
   } else if (acc.platform === 'anthropic') {
     const key = findCookie(cookies, 'sessionKey', 'claude.ai')
     const org = findCookie(cookies, 'lastActiveOrg', 'claude.ai')
@@ -200,6 +218,16 @@ export async function captureSessionFromProfile(accountId: string): Promise<Acco
     const tok =
       findCookie(cookies, 'session', 'windsurf.com') || findCookie(cookies, 'token', 'windsurf.com')
     if (tok && !secrets.refreshToken) {
+      patch.refreshToken = tok
+      changed = true
+    }
+  } else if (acc.platform === 'grok') {
+    const tok =
+      findCookie(cookies, 'sAccessToken', 'grok.com') ||
+      findCookie(cookies, 'sAccessToken', 'x.ai') ||
+      findCookie(cookies, 'sAccessToken', 'accounts.x.ai') ||
+      findCookie(cookies, '__Secure-next-auth.session-token', 'grok.com')
+    if (tok && tok !== secrets.refreshToken && !tok.startsWith('xai-')) {
       patch.refreshToken = tok
       changed = true
     }
@@ -237,9 +265,11 @@ export async function captureSessionFromProfile(accountId: string): Promise<Acco
     }
   }
 
-  if (!changed) return acc
-  patch.customFields = custom
-  return updateAccount(accountId, patch)
+  if (changed) {
+    patch.customFields = custom
+    updateAccount(accountId, patch)
+  }
+  return (await enrichAccountIdentity(accountId)) || getAccount(accountId) || acc
 }
 
 export async function syncSessionAfterSave(accountId: string): Promise<void> {

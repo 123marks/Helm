@@ -2,19 +2,29 @@ import React, { useEffect, useState } from 'react'
 import { Check, Copy, Globe, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { AccountInput, OfficialOAuthStart, Platform } from '@shared/types'
+import { hasPkceOAuth, hasQuota } from '@shared/platformFlags'
+import { officialLoginUrl } from '@shared/officialLogin'
 import { api } from '@renderer/lib/api'
+import { platformMeta } from '@renderer/lib/platforms'
+import { useAccountsStore } from '@renderer/store/accounts'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 
-const NAMES: Partial<Record<Platform, string>> = {
-  cursor: 'Cursor',
-  openai: 'OpenAI',
-  kiro: 'Kiro',
-  windsurf: 'Windsurf'
+export function OfficialAuthPanel({
+  platform,
+  onDone,
+  onCreated
+}: {
+  platform: Platform
+  onDone: (input: AccountInput) => void
+  onCreated?: () => void
+}): React.JSX.Element {
+  if (hasPkceOAuth(platform)) return <PkceAuthPanel platform={platform} onDone={onDone} />
+  return <BrowserAuthPanel platform={platform} onCreated={onCreated || (() => onDone({ platform, label: platform, username: '', email: '' }))} />
 }
 
-export function OfficialAuthPanel({
+function PkceAuthPanel({
   platform,
   onDone
 }: {
@@ -26,7 +36,7 @@ export function OfficialAuthPanel({
   const [waiting, setWaiting] = useState(false)
   const [callback, setCallback] = useState('')
   const [busy, setBusy] = useState(false)
-  const name = NAMES[platform] || platform
+  const name = platformMeta(platform).label
 
   useEffect(() => {
     let dead = false
@@ -45,7 +55,7 @@ export function OfficialAuthPanel({
         setStatus('等待授权完成…')
         setWaiting(true)
         const input = await api.oauth.wait(started.loginId)
-        if (dead) return
+        if (dead || !input) return
         setWaiting(false)
         setStatus('授权成功')
         onDone(input)
@@ -92,7 +102,7 @@ export function OfficialAuthPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        点击下方按钮，在浏览器中完成 {name} 授权登录。
+        点击下方按钮，在浏览器中完成 {name} 授权登录（Google / GitHub / 官方账号均可）。
       </p>
       <div className="space-y-1.5">
         <Label>授权链接</Label>
@@ -131,7 +141,96 @@ export function OfficialAuthPanel({
         {waiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
         <span>{status}</span>
       </div>
-      <p className="text-center text-[11px] text-muted-foreground">完成授权后，此窗口将自动更新</p>
+    </div>
+  )
+}
+
+function BrowserAuthPanel({
+  platform,
+  onCreated
+}: {
+  platform: Platform
+  onCreated: () => void
+}): React.JSX.Element {
+  const create = useAccountsStore((s) => s.create)
+  const replace = useAccountsStore((s) => s.replace)
+  const [draftId, setDraftId] = useState('')
+  const [status, setStatus] = useState('打开官方登录页，用 Google / GitHub / Apple 等授权即可，不必先填账密')
+  const [busy, setBusy] = useState(false)
+  const name = platformMeta(platform).label
+  const url = officialLoginUrl(platform)
+
+  const openLogin = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      let id = draftId
+      if (!id) {
+        const acc = await create({
+          platform,
+          label: `${name} 授权中`,
+          username: '',
+          email: '',
+          tags: ['oauth'],
+          notes: `官方授权登录（${name}）`,
+          oauthProvider: 'oauth'
+        })
+        id = acc.id
+        setDraftId(id)
+      }
+      const r = await api.automation.launchProfile(id, url)
+      if (!r.ok) {
+        toast.error(r.message)
+        setStatus(r.message)
+        return
+      }
+      setStatus('已打开官方登录页。用 Google / GitHub / Apple / 微软授权完成后，先关掉浏览器，再点「我已登录」')
+      toast.success('已打开官方登录页')
+    } catch (e) {
+      toast.error((e as Error).message)
+      setStatus((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const finish = async (): Promise<void> => {
+    if (!draftId) {
+      toast.error('请先打开官方登录页')
+      return
+    }
+    setBusy(true)
+    try {
+      let acc = await api.automation.captureSession(draftId)
+      if (hasQuota(platform)) {
+        acc = await api.automation.refreshQuota(draftId)
+      }
+      replace(acc)
+      setStatus('已抓取登录会话')
+      toast.success('授权成功，账号已保存')
+      onCreated()
+    } catch (e) {
+      toast.error((e as Error).message)
+      setStatus((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        {name} 支持官方页授权登录（Google / GitHub / Apple / 微软 / X 等），不必先填邮箱密码。
+      </p>
+      <Button type="button" className="w-full" size="lg" onClick={() => void openLogin()} disabled={busy}>
+        <Globe className="h-4 w-4" /> 打开官方登录页
+      </Button>
+      <Button type="button" variant="outline" className="w-full" onClick={() => void finish()} disabled={busy || !draftId}>
+        <Check className="h-4 w-4" /> 我已登录，抓取会话
+      </Button>
+      <div className="flex items-center gap-2 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
+        <span>{status}</span>
+      </div>
     </div>
   )
 }

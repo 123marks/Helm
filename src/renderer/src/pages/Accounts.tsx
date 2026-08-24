@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Captions,
   ChevronDown,
   Columns3,
   Copy,
@@ -32,7 +33,7 @@ import { api } from '@renderer/lib/api'
 import { toCsv } from '@renderer/lib/csv'
 import { randomIdentity } from '@renderer/lib/identity'
 import { relativeTime } from '@renderer/lib/utils'
-import { PLATFORMS } from '@renderer/lib/platforms'
+import { hasLocalApply, hasQuota, localApplyLabel, PLATFORMS } from '@renderer/lib/platforms'
 import { officialLoginUrl } from '@shared/officialLogin'
 import { accountTitle } from '@shared/accountDisplay'
 import { useAccountsStore } from '@renderer/store/accounts'
@@ -40,6 +41,7 @@ import { useAppStore } from '@renderer/store/app'
 import { useTasksStore } from '@renderer/store/tasks'
 import { PlatformGlyph } from '@renderer/components/PlatformBadge'
 import { AccountStatusBadge } from '@renderer/components/status'
+import { MembershipBadge } from '@renderer/components/MembershipBadge'
 import { TotpCell } from '@renderer/components/TotpCell'
 import { SecretCell } from '@renderer/components/SecretCell'
 import { getSecrets, invalidateSecrets } from '@renderer/lib/secretsCache'
@@ -91,6 +93,8 @@ export default function Accounts(): React.JSX.Element {
   const update = useAccountsStore((s) => s.update)
   const replace = useAccountsStore((s) => s.replace)
   const openDetail = useAppStore((s) => s.openDetail)
+  const saveSettings = useAppStore((s) => s.saveSettings)
+  const showQuotaHints = useAppStore((s) => s.settings?.showQuotaHints !== false)
   const registerPrefillInboxIds = useAppStore((s) => s.registerPrefillInboxIds)
   const tasks = useTasksStore((s) => s.tasks)
   const activeAccountIds = useMemo(() => {
@@ -160,16 +164,36 @@ export default function Accounts(): React.JSX.Element {
     account: null
   })
   const [mailPeek, setMailPeek] = useState<{ open: boolean; accountId?: string }>({ open: false })
+  const [quotaBusy, setQuotaBusy] = useState(false)
+  const [syncing, setSyncing] = useState<Set<string>>(new Set())
   const [deletedCount, setDeletedCount] = useState(0)
+  const [localCurrent, setLocalCurrent] = useState<Partial<Record<Platform, string>>>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
   const refreshTrash = useCallback(async (): Promise<void> => {
     setDeletedCount((await api.accounts.listDeleted()).length)
   }, [])
 
+  const syncLocal = useCallback(async (): Promise<void> => {
+    try {
+      const snap = await api.automation.syncLocal()
+      setLocalCurrent(snap.current)
+      await load()
+      if (snap.imported.length) {
+        toast.success(`已从本机导入 ${snap.imported.map((a) => a.email || a.label).join('、')}`)
+      }
+    } catch {
+      /* 主进程未就绪时忽略 */
+    }
+  }, [load])
+
   useEffect(() => {
     void refreshTrash()
   }, [refreshTrash])
+
+  useEffect(() => {
+    void syncLocal()
+  }, [syncLocal])
 
   const groups = useMemo(
     () => Array.from(new Set(accounts.map((a) => a.groupName).filter(Boolean))).sort(),
@@ -261,6 +285,18 @@ export default function Accounts(): React.JSX.Element {
     toast.warning(`已导出 ${selectedAccounts.length} 个账号（明文，请妥善保管）`)
   }
 
+  const applyLocal = async (a: Account): Promise<void> => {
+    try {
+      const r = await api.automation.applyLocal(a.id)
+      if (r.ok) {
+        toast.success(r.message)
+        await syncLocal()
+      } else toast.error(r.message)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
   const launchBrowser = async (a: Account, url?: string): Promise<void> => {
     const r = await api.automation.launchProfile(a.id, url)
     if (r.ok) toast.success(r.message)
@@ -277,6 +313,46 @@ export default function Accounts(): React.JSX.Element {
       toast.error((e as Error).message)
     }
   }
+
+  const refreshQuotaBatch = async (ids: string[], label: string): Promise<void> => {
+    const unique = [...new Set(ids)]
+    if (unique.length === 0) {
+      toast.error('没有可查询额度的账号')
+      return
+    }
+    if (quotaBusy) {
+      toast.error('额度查询正在进行')
+      return
+    }
+    setQuotaBusy(true)
+    toast.loading(`${label}：0 / ${unique.length}（主号优先，限速防风控）`, { id: 'quota-batch' })
+    try {
+      const rows = await api.automation.refreshQuotas(unique)
+      rows.forEach(replace)
+      const failed = rows.filter((a) => a.quota?.error).length
+      if (failed) toast.warning(`已刷新 ${rows.length} 个，其中 ${failed} 个失败`, { id: 'quota-batch' })
+      else toast.success(`已刷新 ${rows.length} 个额度`, { id: 'quota-batch' })
+    } catch (e) {
+      toast.error((e as Error).message, { id: 'quota-batch' })
+    } finally {
+      setQuotaBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    return api.automation.onQuotaUpdated((e) => {
+      if (e.account) replace(e.account)
+      setSyncing((prev) => {
+        const next = new Set(prev)
+        if (e.phase === 'start') next.add(e.accountId)
+        else next.delete(e.accountId)
+        return next
+      })
+      if (e.reason === 'batch' && e.phase === 'done') {
+        toast.loading(`额度查询 ${e.done} / ${e.total}`, { id: 'quota-batch' })
+      }
+    })
+  }, [replace])
 
   const bulkStatus = async (status: AccountStatus): Promise<void> => {
     const list = selectedAccounts
@@ -486,6 +562,18 @@ export default function Accounts(): React.JSX.Element {
             <List className="h-4 w-4" />
           </button>
         </div>
+        <button
+          type="button"
+          title={showQuotaHints ? '隐藏额度说明' : '显示额度说明'}
+          aria-label={showQuotaHints ? '隐藏额度说明' : '显示额度说明'}
+          aria-pressed={showQuotaHints}
+          onClick={() => void saveSettings({ showQuotaHints: !showQuotaHints })}
+          className={`rounded-lg border p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            showQuotaHints ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Captions className="h-4 w-4" />
+        </button>
         {viewMode === 'list' && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -640,6 +728,19 @@ export default function Accounts(): React.JSX.Element {
             </Badge>
           )}
         </Button>
+        <Button
+          variant="outline"
+          disabled={quotaBusy}
+          title="查询全部有订阅额度的账号：主号优先，同域名限速，避免风控"
+          onClick={() =>
+            void refreshQuotaBatch(
+              accounts.filter((a) => hasQuota(a.platform)).map((a) => a.id),
+              '刷新全部额度'
+            )
+          }
+        >
+          <RefreshCw className={`h-4 w-4 ${quotaBusy ? 'animate-spin' : ''}`} /> 刷新全部额度
+        </Button>
         <Button variant="outline" onClick={() => setRegisterOpen(true)}>
           <Rocket className="h-4 w-4" /> 批量注册
         </Button>
@@ -678,28 +779,15 @@ export default function Accounts(): React.JSX.Element {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              void (async () => {
-                const ids = selectedAccounts
-                  .filter((a) => ['cursor', 'openai', 'anthropic', 'windsurf', 'kiro'].includes(a.platform))
-                  .map((a) => a.id)
-                if (ids.length === 0) {
-                    toast.error('选中的账号没有可查询额度的平台（Cursor / ChatGPT / Claude / Windsurf / Kiro）')
-                  return
-                }
-                try {
-                  const rows = await api.automation.refreshQuotas(ids)
-                  rows.forEach(replace)
-                  const failed = rows.filter((a) => a.quota?.error).length
-                  if (failed) toast.warning(`已刷新 ${rows.length} 个，其中 ${failed} 个失败（多半还没登录）`)
-                  else toast.success(`已刷新 ${rows.length} 个额度`)
-                } catch (e) {
-                  toast.error((e as Error).message)
-                }
-              })()
-            }}
+            disabled={quotaBusy}
+            onClick={() =>
+              void refreshQuotaBatch(
+                selectedAccounts.filter((a) => hasQuota(a.platform)).map((a) => a.id),
+                '刷新所选额度'
+              )
+            }
           >
-            <RefreshCw className="h-4 w-4" /> 刷新额度
+            <RefreshCw className={`h-4 w-4 ${quotaBusy ? 'animate-spin' : ''}`} /> 刷新额度
           </Button>
           <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
             <Layers className="h-4 w-4" /> 批量编辑
@@ -746,18 +834,21 @@ export default function Accounts(): React.JSX.Element {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 [grid-auto-rows:1fr] sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((a) => (
               <AccountCard
                 key={a.id}
                 account={a}
                 running={activeAccountIds.has(a.id)}
+                syncing={syncing.has(a.id)}
+                current={localCurrent[a.platform] === a.id}
                 selected={selected.has(a.id)}
                 onToggleSelect={() => toggle(a.id)}
                 onOpenDetail={() => openDetail(a.id)}
                 onToggleFavorite={() => void toggleFavorite(a)}
                 onEdit={() => setDialog({ open: true, account: a })}
                 onRun={() => setRunDialog({ open: true, accounts: [a] })}
+                onApplyLocal={() => void applyLocal(a)}
                 onLaunch={() => void launchBrowser(a)}
                 onAuthLogin={() => void launchBrowser(a, officialLoginUrl(a.platform))}
                 onCopyPassword={() => void copyPassword(a)}
@@ -770,7 +861,7 @@ export default function Accounts(): React.JSX.Element {
                 }}
                 onEditProxy={() => setDialog({ open: true, account: a })}
                 onPeekMail={() => setMailPeek({ open: true, accountId: a.id })}
-                onRefreshQuota={() => void refreshQuota(a)}
+                onRefreshQuota={() => refreshQuota(a)}
                 onDelete={() => void onDelete(a)}
               />
             ))}
@@ -830,8 +921,14 @@ export default function Accounts(): React.JSX.Element {
                       onClick={() => openDetail(a.id)}
                       title="查看详情"
                     >
-                      <div className="font-medium group-hover/detail:text-primary group-hover/detail:underline">
+                      <div className="flex items-center gap-1.5 font-medium group-hover/detail:text-primary group-hover/detail:underline">
                         {accountTitle(a)}
+                        {hasQuota(a.platform) && <MembershipBadge platform={a.platform} quota={a.quota} />}
+                        {localCurrent[a.platform] === a.id && (
+                          <Badge className="h-5 bg-emerald-500/20 px-1.5 text-[10px] text-emerald-300">
+                            当前使用
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground">{a.email || a.username || '—'}</div>
                     </button>
@@ -910,6 +1007,11 @@ export default function Accounts(): React.JSX.Element {
                       <DropdownMenuItem onClick={() => void copyTotp(a)}>
                         <Copy className="h-4 w-4" /> 复制验证码
                       </DropdownMenuItem>
+                      {hasLocalApply(a.platform) && (
+                        <DropdownMenuItem onClick={() => void applyLocal(a)}>
+                          <Play className="h-4 w-4" /> 应用到本地 {localApplyLabel(a.platform)}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => setRunDialog({ open: true, accounts: [a] })}>
                         <Play className="h-4 w-4" /> 运行自动化
                       </DropdownMenuItem>

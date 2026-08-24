@@ -19,7 +19,7 @@ export function Logo({
       width={size}
       height={size}
       className={className}
-      alt="AI Account Manager"
+      alt="Helm"
       draggable={false}
     />
   )

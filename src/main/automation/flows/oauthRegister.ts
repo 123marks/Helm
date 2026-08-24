@@ -192,6 +192,30 @@ const SPECS: OAuthRegisterSpec[] = [
       github: ['button:has-text("GitHub")']
     },
     successUrlIncludes: 'kiro.dev'
+  },
+  {
+    platform: 'grok',
+    title: 'Grok 注册（OAuth）',
+    description: '用已有 Google / X 账号在 xAI 官方页授权登录 Grok。',
+    signupUrl: 'https://accounts.x.ai/sign-in',
+    providers: ['google'],
+    oauthButtonSelectors: {
+      google: ['button:has-text("Google")'],
+      github: []
+    },
+    successUrlIncludes: 'x.ai'
+  },
+  {
+    platform: 'antigravity',
+    title: 'Antigravity 注册（OAuth）',
+    description: '用已有 Google 账号在 Antigravity 官方页授权登录。',
+    signupUrl: 'https://antigravity.google',
+    providers: ['google'],
+    oauthButtonSelectors: {
+      google: ['button:has-text("Google")', 'button:has-text("使用 Google")'],
+      github: []
+    },
+    successUrlIncludes: 'antigravity.google'
   }
 ]
 

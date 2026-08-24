@@ -7,6 +7,11 @@ release/
 .vscode/*
 !.vscode/extensions.json
 
+# build-time secrets (see .env.example)
+.env
+.env.local
+.env.*.local
+
 # app runtime data (never commit secrets/db)
 userData/
 *.sqlite

@@ -11,7 +11,7 @@ import { officialLoginUrl } from '@shared/officialLogin'
 import { randomIdentity } from '@renderer/lib/identity'
 import { genPassword } from '@renderer/lib/utils'
 import { decodeQrFromFile } from '@renderer/lib/qr'
-import { hasQuota, PLATFORMS, platformMeta } from '@renderer/lib/platforms'
+import { hasOfficialAuth, hasQuota, PLATFORMS, platformMeta } from '@renderer/lib/platforms'
 import { OfficialAuthPanel } from '@renderer/components/OfficialAuthPanel'
 import { PlatformGlyph } from '@renderer/components/PlatformBadge'
 import { PasswordGeneratorDialog } from '@renderer/components/PasswordGeneratorDialog'
@@ -174,8 +174,7 @@ export function AccountDialog({
     }
   }, [open, account])
 
-  const oauthReady =
-    !account && (form.platform === 'cursor' || form.platform === 'openai' || form.platform === 'kiro' || form.platform === 'windsurf')
+  const oauthReady = !account && hasOfficialAuth(form.platform)
 
   useEffect(() => {
     if (!open || account) return
@@ -186,8 +185,10 @@ export function AccountDialog({
     (input: AccountInput) => {
       void (async () => {
         try {
-          await create(input)
-          toast.success('授权成功，账号已保存')
+          const acc = await create(input)
+          toast.success(
+            hasQuota(acc.platform) ? '授权成功，正在后台同步额度' : '授权成功，账号已保存'
+          )
           onOpenChange(false)
         } catch (e) {
           toast.error((e as Error).message)
@@ -517,7 +518,11 @@ export function AccountDialog({
           </div>
 
           {showOAuth && (
-            <OfficialAuthPanel platform={form.platform} onDone={onOAuthDone} />
+            <OfficialAuthPanel
+              platform={form.platform}
+              onDone={onOAuthDone}
+              onCreated={() => onOpenChange(false)}
+            />
           )}
 
           {showToken && (
@@ -554,6 +559,10 @@ export function AccountDialog({
                           ? 'ChatGPT session-token，或浏览器导出的 Cookie JSON'
                           : form.platform === 'windsurf'
                             ? 'sk-ws-01-… 或 {"apiKey":"sk-ws-01-..."}'
+                            : form.platform === 'grok'
+                              ? 'xai-… API Key，或 grok.com Cookie JSON'
+                              : form.platform === 'antigravity'
+                                ? 'Google refresh_token / oauth_creds.json（含 access_token + refresh_token）'
                             : '粘贴 Token 或 JSON'
                 }
                 className="min-h-[160px] font-mono text-xs"
@@ -830,6 +839,10 @@ export function AccountDialog({
                       ? 'ChatGPT Session Token / Cookie JSON'
                       : form.platform === 'windsurf'
                         ? 'Windsurf API Key / JSON'
+                        : form.platform === 'grok'
+                          ? 'Grok / xAI Token'
+                          : form.platform === 'antigravity'
+                            ? 'Antigravity · Google Token'
                         : 'Refresh Token'}
             </Label>
             <Textarea
@@ -854,6 +867,10 @@ export function AccountDialog({
                         ? 'ChatGPT session-token，或从浏览器导出的 Cookie JSON'
                         : form.platform === 'windsurf'
                           ? 'sk-ws-01-… 或 {"apiKey":"sk-ws-01-..."}'
+                          : form.platform === 'grok'
+                            ? 'xai-… 或 grok.com Cookie JSON'
+                            : form.platform === 'antigravity'
+                              ? '1//… refresh_token，或 ~/.gemini/oauth_creds.json'
                           : ''
               }
               className="font-mono text-xs"

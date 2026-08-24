@@ -1,6 +1,6 @@
 # 架构设计文档 (ARCHITECTURE)
 
-> AI-AccountManager —— 面向 Google / GitHub / X(Twitter) / YouTube 等平台的多账号安全管理与浏览器自动化工具。
+> Helm —— 面向 Google / GitHub / X(Twitter) / YouTube 等平台的多账号安全管理与浏览器自动化工具。
 >
 > 本文档是**设计蓝图 + 实现规范**。任何改动应先更新本文档，再改代码，保持文档与代码一致（single source of truth）。
 
@@ -80,7 +80,7 @@ Electron 三类进程，安全边界清晰：
 ## 4. 目录结构 (Directory Layout)
 
 ```
-AI-AccountManager/
+Helm/
 ├─ docs/
 │  ├─ ARCHITECTURE.md          # 本文件：架构与实现规范
 │  ├─ HANDOFF.md               # 交接/开发者文档（如何跑、如何扩展）

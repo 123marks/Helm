@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { getDb } from '../index'
 import { paths } from '../../paths'
 import { encryptField, decryptField } from '../../services/crypto'
+import { relocatedProfileDirs } from '../../services/dataMigration'
 import type {
   Account,
   AccountInput,
@@ -172,6 +173,28 @@ export function listAccounts(): Account[] {
 export function getAccount(id: string): Account | null {
   const r = rawRow(id)
   return r ? mapRow(r) : null
+}
+
+/**
+ * Chrome profile paths are absolute, so they go stale when the data directory
+ * moves (app rename, machine migration). Re-point the rows that clearly belong
+ * under the current profiles root.
+ */
+export function repairProfileDirs(): number {
+  const rows = getDb().prepare('SELECT id, profile_dir FROM accounts').all() as {
+    id: string
+    profile_dir: string
+  }[]
+  const fixes = relocatedProfileDirs(
+    paths().profiles,
+    rows.map((r) => ({ id: r.id, profileDir: r.profile_dir }))
+  )
+  if (fixes.length === 0) return 0
+  const stmt = getDb().prepare('UPDATE accounts SET profile_dir = ? WHERE id = ?')
+  getDb().transaction(() => {
+    for (const f of fixes) stmt.run(f.profileDir, f.id)
+  })()
+  return fixes.length
 }
 
 export function createAccount(input: AccountInput): Account {

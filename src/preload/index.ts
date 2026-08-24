@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC } from '@shared/ipc'
-import type { Api, AutomationTask, LogEntry, UpdateStatus } from '@shared/types'
+import type { Api, AutomationTask, LogEntry, QuotaSyncEvent, UpdateStatus } from '@shared/types'
 
 const api: Api = {
   accounts: {
@@ -71,10 +71,18 @@ const api: Api = {
     importCookies: (accountId, json) => ipcRenderer.invoke(IPC.automation.importCookies, accountId, json),
     refreshQuota: (accountId) => ipcRenderer.invoke(IPC.automation.refreshQuota, accountId),
     refreshQuotas: (accountIds) => ipcRenderer.invoke(IPC.automation.refreshQuotas, accountIds),
+    captureSession: (accountId) => ipcRenderer.invoke(IPC.automation.captureSession, accountId),
+    applyLocal: (accountId) => ipcRenderer.invoke(IPC.automation.applyLocal, accountId),
+    syncLocal: () => ipcRenderer.invoke(IPC.automation.syncLocal),
     onTaskUpdated: (cb) => {
       const listener = (_e: IpcRendererEvent, task: AutomationTask): void => cb(task)
       ipcRenderer.on(IPC.automation.taskUpdated, listener)
       return () => ipcRenderer.removeListener(IPC.automation.taskUpdated, listener)
+    },
+    onQuotaUpdated: (cb) => {
+      const listener = (_e: IpcRendererEvent, event: QuotaSyncEvent): void => cb(event)
+      ipcRenderer.on(IPC.automation.quotaUpdated, listener)
+      return () => ipcRenderer.removeListener(IPC.automation.quotaUpdated, listener)
     }
   },
   oauth: {

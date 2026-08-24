@@ -279,6 +279,30 @@ const KIRO_REGISTER: RegisterSpec = {
   successUrlIncludes: 'kiro.dev'
 }
 
+const ANTIGRAVITY_REGISTER: RegisterSpec = {
+  platform: 'antigravity',
+  title: 'Antigravity 注册',
+  description: '打开 Google Antigravity 官方页，用 Google 账号授权登录。',
+  signupUrl: 'https://antigravity.google',
+  emailSelectors: ['input[type="email"]', 'input[name="email"]'],
+  submitSelectors: ['button[type="submit"]'],
+  codeSelectors: ['input[autocomplete="one-time-code"]', 'input[name="code"]'],
+  emailKeyword: 'google',
+  successUrlIncludes: 'antigravity.google'
+}
+
+const GROK_REGISTER: RegisterSpec = {
+  platform: 'grok',
+  title: 'Grok 注册',
+  description: '打开 xAI 官方登录页。可用 X / Google / 邮箱授权，不必先填账密。',
+  signupUrl: 'https://accounts.x.ai/sign-in',
+  emailSelectors: ['input[type="email"]', 'input[name="email"]'],
+  submitSelectors: ['button[type="submit"]'],
+  codeSelectors: ['input[autocomplete="one-time-code"]', 'input[name="code"]'],
+  emailKeyword: 'x.ai',
+  successUrlIncludes: 'x.ai'
+}
+
 const ANTHROPIC_REGISTER: RegisterSpec = {
   platform: 'anthropic',
   title: 'Anthropic / Claude 注册',
@@ -333,5 +357,7 @@ export const registerFlows: Flow[] = [
   makeRegisterFlow(ANTHROPIC_REGISTER),
   makeRegisterFlow(CURSOR_REGISTER),
   makeRegisterFlow(WINDSURF_REGISTER),
-  makeRegisterFlow(KIRO_REGISTER)
+  makeRegisterFlow(KIRO_REGISTER),
+  makeRegisterFlow(GROK_REGISTER),
+  makeRegisterFlow(ANTIGRAVITY_REGISTER)
 ]

@@ -65,7 +65,11 @@ export const IPC = {
     importCookies: 'automation:import-cookies',
     refreshQuota: 'automation:refresh-quota',
     refreshQuotas: 'automation:refresh-quotas',
-    taskUpdated: 'automation:task-updated'
+    captureSession: 'automation:capture-session',
+    applyLocal: 'automation:apply-local',
+    syncLocal: 'automation:sync-local',
+    taskUpdated: 'automation:task-updated',
+    quotaUpdated: 'automation:quota-updated'
   },
   logs: {
     query: 'logs:query',

@@ -4,6 +4,7 @@ import { api } from '@renderer/lib/api'
 
 export type Page =
   | 'dashboard'
+  | 'cockpit'
   | 'accounts'
   | 'security'
   | '2fa'

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { adoptLegacyDbFile } from './services/dataMigration'
 
 export interface AppPaths {
   userData: string
@@ -18,12 +19,13 @@ export function initPaths(userData: string): AppPaths {
     profiles: join(userData, 'chrome-profiles'),
     screenshots: join(userData, 'screenshots'),
     logs: join(userData, 'logs'),
-    dbFile: join(userData, 'ai-account-manager.sqlite'),
+    dbFile: join(userData, 'helm.sqlite'),
     keyFile: join(userData, 'master.key')
   }
   for (const d of [dirs.profiles, dirs.screenshots, dirs.logs]) {
     mkdirSync(d, { recursive: true })
   }
+  adoptLegacyDbFile(userData, dirs.dbFile)
   return dirs
 }
 

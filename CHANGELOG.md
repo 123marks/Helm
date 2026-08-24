@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0
+
+- **项目更名 Helm**：应用名、安装包、快捷方式、GitHub 仓库同步改名；首次启动自动把旧数据目录（`AI Account Manager` / `ai-account-manager`）的数据库、`master.key`、`Local State`、浏览器配置迁移过来，旧目录保留为备份，并修正账号里存的绝对 profile 路径
+- **新增「额度总览」页**：KPI（监控账号数 / 平均用量 / 告警数 / 最近重置倒计时）、平台聚合条、需要关注清单、全账号用量表（按用量 / 重置 / 查询时间 / 套餐 / 平台排序，可按状态筛选），支持整页或单账号刷新
+- **授权后额度自动出数**：主进程在账号创建或换 Token 后立即后台拉一次额度并推给界面，不必再手点刷新；另有可配置的后台轮询（默认 30 分钟，只刷过期的账号）
+- **会员档位重做**：新增各平台官方档位目录（Cursor Hobby/Pro/Pro+/Ultra/Teams Standard·Premium/Enterprise、ChatGPT Free/Go/Plus/Pro/Business/Enterprise、Claude Free/Pro/Max 5×/Max 20×/Team·Premium/Enterprise、Kiro Free/Pro/Pro+/Pro Max/Power、Windsurf、SuperGrok Lite/SuperGrok/Plus/Heavy、Google AI Plus/Pro/Ultra 5×·20×），卡片显示档位名、公开价格与该档到底买到什么
+- **Antigravity 正名**：不再叫「反重力」；区分 Antigravity IDE 与 Antigravity 2.0，套餐按 Google AI 订阅体系显示；额度新增「按模型额度」折叠区（每个模型的 5h / Weekly 剩余）
+- Cursor 额度贴近官方 Usage 面板：Total Usage / Auto + Composer / API Usage 直接带 `$x / $y` 绝对值，按需使用未开启时显式显示「已禁用」，无上限时显示为不限量而非天文数字
+- 布局统一：卡片头部与面板等高、同一网格内卡片等高、徽章尺寸与间距一致；仪表盘与额度总览共用同一套 KPI 卡；仪表盘新增额度告警入口
+- 添加账号默认走官方授权：Google / GitHub / Apple / 微软 / X 等 SSO，不必先填账密；Cursor / OpenAI / Kiro / Windsurf 仍走专用 OAuth
+- 新增 Grok（xAI）：官方登录、xai- Key / Cookie JSON、订阅额度
+- Cursor 额度对齐官方 Usage：Total / Auto + Composer / API，按需用量仅在开启且有消耗时显示；不再误标「基础/高级 0/0」
+- 各平台套餐名按公开价目显示（Ultra $200/mo、ChatGPT Plus、SuperGrok 等）；卡片边框随档位变化
+- 额度条可点复制、刷新有转圈和 toast；详情里 Token / 自定义字段可完整显示、显示/复制
+- Kiro 试用/奖励额度不再加进订阅额度
+- 详情字段与凭据去掉常驻复制图标：悬停高亮，点击即复制，密钥仅在悬停时出现显示开关
+- 卡片底栏收成统一工具条（去掉与状态点重复的复制钥匙）；详情抽屉底栏改为等宽四列操作格
+- 会员徽章统一用 FREE；额度卡片按档位描边高光，进度条改为渐变
+- 额度查询改为先打官方 HTTP：已有会话不再每次读写 Chrome 配置；全量刷新主号优先、同域名限速、429 退避
+- Grok 图标改为官方 G 形标；额度同时读 rate-limits / user / session，支持 xai- Key 与 Cookie
+- 新增反重力（Antigravity）：官方 Google OAuth、Token/JSON 导入、Claude / Gemini 5h·Weekly + AI 积分（对齐 Cockpit）
+- 额度说明可开关（设置 / 账号页工具栏）；默认显示套餐内用量等介绍
+- Grok 图标改为 grok.com 官方黑洞 G；反重力改为官方彩虹 A（IDE 黑底版）
+- 卡片播放键改为「应用到本地」：把会话写入 Cursor / Kiro / Windsurf / Codex / Claude Code / Grok / 反重力 的本机 IDE 或 CLI
+- GitHub / Google 等无额度卡片改为身份信息面板，和额度卡同高、同质感
+- 官方授权后补邮箱和登录方式（Google / GitHub / 邮箱等），卡片标题不再显示「Cursor cursor」
+- 识别本机 IDE / CLI 当前登录：卡片标「当前使用」，未知会话自动入库，切换成功有明确提示
+- 本机同步只读小 JSON，不再打开 Cursor `state.vscdb` / 扫进程 / 联网补邮箱，避免主进程卡死
+- 开发态窗口图标回退到品牌图，不再落到 Electron 默认原子标
+
 ## 0.2.9
 
 - 添加账号三个页签内容分开：OAuth 只做官方授权；Token / JSON 只粘贴会话或导入 .json 文件；手动填写才是完整表单

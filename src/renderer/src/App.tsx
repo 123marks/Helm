@@ -14,6 +14,7 @@ import { applyTheme } from '@renderer/lib/theme'
 import { toast } from 'sonner'
 import { api } from '@renderer/lib/api'
 import Dashboard from '@renderer/pages/Dashboard'
+import Cockpit from '@renderer/pages/Cockpit'
 import Accounts from '@renderer/pages/Accounts'
 import Security from '@renderer/pages/Security'
 import TwoFactor from '@renderer/pages/TwoFactor'
@@ -146,6 +147,7 @@ export default function App(): React.JSX.Element {
           <main className="flex-1 overflow-y-auto">
             <div className="animate-fade-in p-6">
               {page === 'dashboard' && <Dashboard />}
+              {page === 'cockpit' && <Cockpit />}
               {page === 'accounts' && <Accounts />}
               {page === 'security' && <Security />}
               {page === '2fa' && <TwoFactor />}

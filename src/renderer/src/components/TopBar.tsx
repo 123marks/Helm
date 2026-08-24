@@ -8,6 +8,7 @@ import { Button } from '@renderer/components/ui/button'
 
 const TITLES: Record<Page, { title: string; subtitle: string }> = {
   dashboard: { title: '仪表盘', subtitle: '账号与任务总览' },
+  cockpit: { title: '额度总览', subtitle: '全平台订阅额度监控 · 告警 · 重置倒计时' },
   accounts: { title: '账号管理', subtitle: '增删改查 · 2FA · 凭据加密存储' },
   security: { title: '安全中心', subtitle: '弱密码 / 重复密码 / 2FA / 恢复信息体检' },
   '2fa': { title: '2FA 中心', subtitle: '实时验证码 · otpauth / Base32 导入 · 一键复制' },

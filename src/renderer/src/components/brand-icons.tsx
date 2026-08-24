@@ -152,6 +152,17 @@ export const BRAND: Partial<Record<Platform, Brand>> = {
     viewBox: '0 0 1200 1200',
     flush: true,
     node: <KiroMark />
+  },
+  grok: {
+    tile: '#050505',
+    viewBox: '0 0 512 512',
+    flush: true,
+    node: <GrokMark />
+  },
+  // Official rainbow A. Consumer tile is white; IDE tile is black — we use IDE.
+  antigravity: {
+    tile: '#000000',
+    node: <AntigravityMark />
   }
 }
 
@@ -184,6 +195,52 @@ function KiroMark(): React.JSX.Element {
           fill="#000"
           d="M771.24 549.353C738.445 549.353 733.477 510.097 733.477 486.742C733.477 465.623 737.203 448.977 744.41 438.293C750.621 428.852 759.814 424.131 771.24 424.131C782.672 424.131 792.609 428.852 799.564 438.541C807.516 449.474 811.74 466.12 811.74 486.742C811.74 525.998 796.588 549.353 771.492 549.353H771.24Z"
         />
+      </g>
+    </>
+  )
+}
+
+/** Official Grok G from https://grok.com/images/favicon.svg (Jon Vio 2025) */
+function GrokMark(): React.JSX.Element {
+  return (
+    <>
+      <path
+        fill="#FCFCFC"
+        d="M210.484 312.759L343.465 210.383C349.984 205.364 359.302 207.322 362.408 215.117C378.758 256.231 371.454 305.64 338.925 339.563C306.397 373.487 261.137 380.927 219.768 363.983L174.577 385.803C239.394 432.008 318.104 420.581 367.289 369.251C406.303 328.564 418.386 273.104 407.088 223.091L407.19 223.198C390.807 149.726 411.218 120.359 453.03 60.3072C454.02 58.8833 455.01 57.4595 456 56L400.978 113.382V113.204L210.45 312.794"
+      />
+      <path
+        fill="#FCFCFC"
+        d="M183.042 337.641C136.519 291.294 144.54 219.567 184.236 178.203C213.59 147.59 261.683 135.096 303.666 153.464L348.755 131.75C340.632 125.627 330.221 119.042 318.275 114.414C264.277 91.2407 199.63 102.774 155.735 148.516C113.513 192.549 100.236 260.254 123.036 318.027C140.069 361.206 112.148 391.748 84.0229 422.575C74.0561 433.503 64.0553 444.431 56 456L183.007 337.677"
+      />
+    </>
+  )
+}
+
+/**
+ * Official Antigravity A (press / Wikimedia lockup).
+ * Same mark on both product tiles: white = Antigravity, black = Antigravity IDE.
+ */
+function AntigravityMark(): React.JSX.Element {
+  const uid = React.useId().replace(/:/g, '')
+  const d =
+    'M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z'
+  return (
+    <>
+      <defs>
+        <filter id={`${uid}-b`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.5" />
+        </filter>
+        <clipPath id={`${uid}-c`}>
+          <path d={d} />
+        </clipPath>
+      </defs>
+      <path d={d} fill="#3186FF" />
+      <g clipPath={`url(#${uid}-c)`} filter={`url(#${uid}-b)`}>
+        <ellipse cx="7" cy="5.5" rx="6.2" ry="7" fill="#FFE432" />
+        <ellipse cx="16.5" cy="5" rx="6" ry="6.2" fill="#FC413D" />
+        <ellipse cx="4.5" cy="14" rx="7.2" ry="8" fill="#00B95C" />
+        <ellipse cx="18" cy="8.5" rx="5.2" ry="4.4" fill="#FBBC04" />
+        <ellipse cx="13.5" cy="20" rx="6.4" ry="5.2" fill="#3186FF" />
       </g>
     </>
   )

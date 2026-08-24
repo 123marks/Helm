@@ -5,6 +5,7 @@ import * as repo from '../db/repositories/accounts'
 import { exportEncrypted, importData } from '../services/backup'
 import { requireUnlocked } from '../services/lock'
 import { syncSessionAfterSave } from '../services/sessionSync'
+import { scheduleQuotaSync } from '../services/quotaAuto'
 
 export function registerAccountsIpc(): void {
   ipcMain.handle(IPC.accounts.list, () => repo.listAccounts())
@@ -12,12 +13,16 @@ export function registerAccountsIpc(): void {
   ipcMain.handle(IPC.accounts.create, async (_e, input: AccountInput) => {
     const acc = repo.createAccount(input)
     await syncSessionAfterSave(acc.id)
+    // A brand new account has no quota yet; pull it in the background so the
+    // card fills itself in instead of waiting for a manual refresh.
+    scheduleQuotaSync(acc.id)
     return repo.getAccount(acc.id) ?? acc
   })
   ipcMain.handle(IPC.accounts.update, async (_e, id: string, patch: Partial<AccountInput>) => {
     const acc = repo.updateAccount(id, patch)
     if (patch.refreshToken !== undefined || patch.customFields !== undefined) {
       await syncSessionAfterSave(id)
+      scheduleQuotaSync(id)
     }
     return repo.getAccount(id) ?? acc
   })

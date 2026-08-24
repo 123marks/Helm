@@ -114,9 +114,12 @@ export function SecretCell({
         type="button"
         onClick={() => void copy()}
         title="点击复制"
-        className="max-w-[160px] truncate font-mono text-xs tracking-wide text-muted-foreground hover:text-foreground"
+        className="group/copy max-w-[180px] truncate rounded-md px-1 py-0.5 font-mono text-xs tracking-wide text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
       >
         {display}
+        <span className="ml-1 font-sans text-[10px] text-primary opacity-0 transition-opacity group-hover/copy:opacity-100">
+          复制
+        </span>
       </button>
       {onEdit && (
         <button

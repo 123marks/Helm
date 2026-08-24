@@ -1,8 +1,9 @@
 {
-  "name": "ai-account-manager",
-  "version": "0.2.9",
-  "description": "多平台账号安全管理与浏览器自动化工具（Google / GitHub / 苹果邮箱 / OAuth）—— Electron + React + TypeScript + Playwright",
-  "author": "AI-AccountManager Contributors",
+  "name": "helm",
+  "productName": "Helm",
+  "version": "0.3.0",
+  "description": "Helm —— AI 订阅账号的驾驶舱：多平台账号安全管理、额度监控与浏览器自动化（Electron + React + TypeScript + Playwright）",
+  "author": "Helm Contributors",
   "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
@@ -23,9 +24,9 @@
     "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "build": {
-    "appId": "com.aiaccountmanager.app",
-    "productName": "AI Account Manager",
-    "copyright": "Copyright © 2026 AI-AccountManager Contributors",
+    "appId": "com.helmapp.desktop",
+    "productName": "Helm",
+    "copyright": "Copyright © 2026 Helm Contributors",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -49,13 +50,13 @@
       {
         "provider": "github",
         "owner": "123marks",
-        "repo": "Account-Management",
+        "repo": "Helm",
         "releaseType": "release"
       }
     ],
     "win": {
       "icon": "build/icon.png",
-      "artifactName": "AI-Account-Manager-${version}-win-${arch}.${ext}",
+      "artifactName": "Helm-${version}-win-${arch}.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -84,21 +85,21 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AI Account Manager",
+      "shortcutName": "Helm",
       "deleteAppDataOnUninstall": false,
       "installerLanguages": [
         "zh_CN",
         "en_US"
       ],
-      "artifactName": "AI-Account-Manager-${version}-win-${arch}-setup.${ext}"
+      "artifactName": "Helm-${version}-win-${arch}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "AI-Account-Manager-${version}-win-${arch}-portable.${ext}"
+      "artifactName": "Helm-${version}-win-${arch}-portable.${ext}"
     },
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.utilities",
-      "artifactName": "AI-Account-Manager-${version}-mac-${arch}.${ext}",
+      "artifactName": "Helm-${version}-mac-${arch}.${ext}",
       "target": [
         {
           "target": "dmg",
@@ -119,8 +120,8 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Utility",
-      "maintainer": "AI-AccountManager Contributors",
-      "artifactName": "AI-Account-Manager-${version}-linux-${arch}.${ext}",
+      "maintainer": "Helm Contributors",
+      "artifactName": "Helm-${version}-linux-${arch}.${ext}",
       "target": [
         {
           "target": "AppImage",

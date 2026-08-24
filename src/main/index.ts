@@ -8,10 +8,25 @@ import { reconcileOrphanTasks } from './db/repositories/tasks'
 import { logger } from './services/logger'
 import { registerIpc } from './ipc'
 import { initUpdater, scheduleStartupCheck } from './services/updater'
+import { startQuotaAutoRefresh } from './services/quotaAuto'
+import { migrateLegacyUserData } from './services/dataMigration'
+import { repairProfileDirs } from './db/repositories/accounts'
 
 let mainWindow: BrowserWindow | null = null
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
+
+// Runs at import time, before `app.whenReady()`: Chromium regenerates
+// `Local State` (which holds the safeStorage key) as the browser process boots,
+// so the pre-Helm data directory has to be adopted before that happens.
+const legacyMigration = (() => {
+  try {
+    return migrateLegacyUserData(app.getPath('userData'))
+  } catch (e) {
+    console.error('[app] 旧数据目录迁移失败:', e)
+    return null
+  }
+})()
 
 function escapeHtml(s: string): string {
   return s
@@ -55,7 +70,7 @@ function createErrorWindow(title: string, detail: string): void {
     width: 820,
     height: 560,
     backgroundColor: '#0b0f1a',
-    title: 'AI Account Manager'
+    title: 'Helm'
   })
   void win.loadURL(errorPageUrl(title, detail, false))
   win.show()
@@ -128,8 +143,14 @@ function wireDiagnostics(wc: WebContents): void {
 let revealWindow: () => void = () => {}
 
 function resolveIcon(): string | undefined {
-  const p = join(app.getAppPath(), 'build', 'icon.png')
-  return existsSync(p) ? p : undefined
+  const candidates = [
+    join(process.cwd(), 'build', 'icon.png'),
+    join(app.getAppPath(), 'build', 'icon.png'),
+    join(__dirname, '../../build/icon.png'),
+    join(process.cwd(), 'src/renderer/src/assets/logo.png'),
+    join(app.getAppPath(), 'src/renderer/src/assets/logo.png')
+  ]
+  return candidates.find((p) => existsSync(p))
 }
 
 function createWindow(): void {
@@ -141,7 +162,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0b0f1a',
-    title: 'AI Account Manager',
+    title: 'Helm',
     icon: resolveIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -208,11 +229,21 @@ async function bootstrap(): Promise<void> {
     initPaths(app.getPath('userData'))
     initCrypto()
     await initDatabase()
+    if (legacyMigration) {
+      logger.info(
+        'app',
+        `已从旧数据目录迁移：${legacyMigration.from}${
+          legacyMigration.movedProfiles ? '（浏览器配置体积较大，已移动而非复制）' : '（旧目录保留为备份）'
+        }`
+      )
+    }
+    const repaired = repairProfileDirs()
+    if (repaired > 0) logger.info('app', `已修正 ${repaired} 个账号的浏览器配置路径`)
     reconcileOrphanTasks()
     registerIpc(() => mainWindow)
     initUpdater()
     applyContentSecurityPolicy()
-    logger.info('app', 'AI Account Manager 已启动')
+    logger.info('app', 'Helm 已启动')
   } catch (e) {
     const err = e as Error
     console.error('[app] 初始化失败:', err)
@@ -221,6 +252,7 @@ async function bootstrap(): Promise<void> {
   }
   createWindow()
   scheduleStartupCheck()
+  startQuotaAutoRefresh()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

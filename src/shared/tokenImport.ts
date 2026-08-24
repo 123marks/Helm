@@ -81,6 +81,8 @@ function inferPlatform(obj: Record<string, unknown>, email: string, token = ''):
   if (/workoscursorsessiontoken|cursor\.com|user_\w+::/.test(blob)) return 'cursor'
   if (/kiro|builderid|oidc\.|clientsecret|codewhisperer/.test(blob)) return 'kiro'
   if (/chatgpt|openai|__secure-next-auth/.test(blob)) return 'openai'
+  if (/xai-|grok\.com|accounts\.x\.ai|supergrok/.test(blob)) return 'grok'
+  if (/antigravity|cloudcode-pa|cloudaicompanion|availablepromptcredits/.test(blob)) return 'antigravity'
   if (/@/.test(email) && /gmail\.com|google/.test(email)) return 'google'
   return ''
 }
@@ -125,11 +127,20 @@ function fromCookiesArray(cookies: unknown[], hint?: Platform): AccountInput | n
     byName.get('__secure-next-auth.session-token') ||
     byName.get('__host-next-auth.session-token') ||
     byName.get('session-token')
+  const grok = byName.get('saccesstoken')
   const platform =
     hint ||
-    (cursor ? 'cursor' : claude ? 'anthropic' : gpt ? 'openai' : inferPlatform({ cookies: rows }, ''))
+    (cursor
+      ? 'cursor'
+      : claude
+        ? 'anthropic'
+        : gpt
+          ? 'openai'
+          : grok
+            ? 'grok'
+            : inferPlatform({ cookies: rows }, ''))
   if (!platform) return null
-  const token = cursor || claude || gpt || ''
+  const token = cursor || claude || gpt || grok || ''
   const customFields: Record<string, string> = { sessionCookies }
   if (cursor) customFields.sessionToken = cursor
   if (org) customFields.lastActiveOrg = org
@@ -204,6 +215,9 @@ export function parseTokenJson(text: string, hint?: Platform): AccountInput | nu
   if (lastActiveOrg) customFields.lastActiveOrg = lastActiveOrg
   if (accessToken && accessToken !== refreshToken) customFields.accessToken = accessToken
   if (apiKey && apiKey !== refreshToken) customFields.apiKey = apiKey
+  const project = pick(cred, ['project', 'projectId', 'cloudaicompanionProject']) || pick(root, ['project', 'projectId'])
+  if (project) customFields.projectId = project
+  if (platform === 'antigravity' && !customFields.provider) customFields.provider = 'google'
   const expires = pick(cred, ['expiresAt', 'expires_at', 'expiresIn'])
   if (expires) customFields.tokenExpires = expires
 
@@ -234,6 +248,14 @@ export function parseTokenText(text: string, hint?: Platform): AccountInput | nu
   }
   if (/^sk-ws-01-/i.test(raw)) {
     return emptyInput('windsurf', raw, { customFields: { apiKey: raw } })
+  }
+  if (/^xai-/i.test(raw)) {
+    return emptyInput('grok', raw, { customFields: { apiKey: raw } })
+  }
+  if (hint === 'antigravity' && (/^1\/\//.test(raw) || raw.startsWith('ya29.'))) {
+    return emptyInput('antigravity', raw, {
+      customFields: raw.startsWith('ya29.') ? { accessToken: raw, provider: 'google' } : { provider: 'google' }
+    })
   }
   if (/WorkosCursorSessionToken=|user_[A-Za-z0-9]+(%3A%3A|::)/i.test(raw)) {
     const cur = normalizeCursorSession(raw)

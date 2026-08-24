@@ -17,7 +17,7 @@
 
 所有数据仅保存在本机 `userData` 目录，不上传任何服务器：
 
-- `ai-account-manager.sqlite`：账号、任务、日志、设置
+- `helm.sqlite`：账号、任务、日志、设置
 - `master.key`：封存后的主密钥
 - `chrome-profiles/<accountId>/`：各账号独立的 Chrome 用户数据（含登录态 Cookie）
 - `screenshots/`：自动化失败截图

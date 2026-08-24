@@ -3,6 +3,7 @@ import {
   Bot,
   Copy,
   CornerDownLeft,
+  Gauge,
   Globe,
   KeyRound,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import { Dialog, DialogContent, DialogTitle } from '@renderer/components/ui/dial
 
 const PAGES: { key: Page; label: string; icon: typeof Users }[] = [
   { key: 'dashboard', label: '仪表盘', icon: LayoutDashboard },
+  { key: 'cockpit', label: '额度总览', icon: Gauge },
   { key: 'accounts', label: '账号管理', icon: Users },
   { key: 'security', label: '安全中心', icon: Shield },
   { key: '2fa', label: '2FA 中心', icon: KeyRound },

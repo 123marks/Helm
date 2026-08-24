@@ -2,6 +2,8 @@ import { createHash, randomBytes, randomUUID } from 'crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import type { AccountInput, OfficialOAuthStart, Platform } from '@shared/types'
 import { jwtPayload } from '@shared/tokenImport'
+import { hintToAccountFields, lookupCursorIdentity } from './identity'
+import { AG_REDIRECT, AG_SCOPES, antigravityClient } from './antigravityOAuth'
 
 type Session = {
   loginId: string
@@ -292,6 +294,55 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
     return { loginId, platform, authUrl: session.authUrl, expiresIn: 600, intervalSeconds: 1, needsCallback: true }
   }
 
+  if (platform === 'antigravity') {
+    const client = antigravityClient()
+    const state = token()
+    const session: Session = {
+      loginId,
+      platform,
+      authUrl: '',
+      expiresAt: now + 600_000,
+      expiresIn: 600,
+      intervalSeconds: 1,
+      needsCallback: true,
+      state,
+      redirectUri: AG_REDIRECT
+    }
+    sessions.set(loginId, session)
+    try {
+      await listen(session, '127.0.0.1', 51121, async (url, res) => {
+        if (url.pathname !== '/oauth-callback') {
+          writeHtml(res, 404, page(false, 'Not Found'))
+          return
+        }
+        try {
+          await completeAntigravity(session, url)
+          writeHtml(res, 200, page(true, '可以关闭此窗口返回应用'))
+        } catch (e) {
+          writeHtml(res, 400, page(false, (e as Error).message))
+        }
+      })
+    } catch (e) {
+      if (String((e as Error).message).includes('EADDRINUSE')) {
+        session.error = '本机 51121 端口被占用。关掉占用进程后重试，或把回调地址贴进来。'
+      } else {
+        throw e
+      }
+    }
+    const q = new URLSearchParams({
+      response_type: 'code',
+      client_id: client.id,
+      redirect_uri: AG_REDIRECT,
+      scope: AG_SCOPES,
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: 'true',
+      state
+    })
+    session.authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${q.toString()}`
+    return { loginId, platform, authUrl: session.authUrl, expiresIn: 600, intervalSeconds: 1, needsCallback: true }
+  }
+
   throw new Error(`${platform} 没有公开 OAuth。请用 Token / JSON 粘贴`)
 }
 
@@ -308,12 +359,13 @@ export function officialOAuthSnapshot(loginId: string): OfficialOAuthStart {
   }
 }
 
-export async function waitOfficialOAuth(loginId: string): Promise<AccountInput> {
+/** Resolves to null when the user closed the dialog — cancelling is not an error. */
+export async function waitOfficialOAuth(loginId: string): Promise<AccountInput | null> {
   const session = sessions.get(loginId)
   if (!session) throw new Error('没有进行中的授权会话')
   if (session.platform === 'cursor') return pollCursor(session)
   while (Date.now() < session.expiresAt) {
-    if (session.cancelled) throw new Error('授权已取消')
+    if (session.cancelled) return null
     if (session.error) throw new Error(session.error)
     if (session.result) return session.result
     await new Promise((r) => setTimeout(r, (session.intervalSeconds || 1) * 1000))
@@ -328,6 +380,7 @@ export async function submitOfficialOAuthCallback(loginId: string, raw: string):
   if (session.platform === 'openai') return completeOpenAI(session, url)
   if (session.platform === 'kiro') return completeKiro(session, url)
   if (session.platform === 'windsurf') return completeWindsurf(session, url)
+  if (session.platform === 'antigravity') return completeAntigravity(session, url)
   throw new Error('该平台不需要手动回调')
 }
 
@@ -349,11 +402,20 @@ function parseCallback(raw: string, fallbackBase: string): URL {
   return new URL(`${fallbackBase}${fallbackBase.includes('?') ? '&' : '?'}${t.replace(/^\?/, '')}`)
 }
 
-async function pollCursor(session: Session): Promise<AccountInput> {
+async function pollCursor(session: Session): Promise<AccountInput | null> {
   const url = `https://api2.cursor.sh/auth/poll?uuid=${encodeURIComponent(session.uuid || '')}&verifier=${encodeURIComponent(session.verifier || '')}`
   while (Date.now() < session.expiresAt) {
-    if (session.cancelled) throw new Error('授权已取消')
-    const res = await fetch(url, { headers: { accept: 'application/json' } })
+    if (session.cancelled) return null
+    let res: Response
+    try {
+      res = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(10000)
+      })
+    } catch {
+      await new Promise((r) => setTimeout(r, session.intervalSeconds * 1000))
+      continue
+    }
     if (res.status === 404) {
       await new Promise((r) => setTimeout(r, session.intervalSeconds * 1000))
       continue
@@ -373,15 +435,21 @@ async function pollCursor(session: Session): Promise<AccountInput> {
       await new Promise((r) => setTimeout(r, session.intervalSeconds * 1000))
       continue
     }
-    const email = data.authId && data.authId.includes('@') ? data.authId : ''
+    const id = await lookupCursorIdentity(access || refresh)
+    const email = id.email || (data.authId && data.authId.includes('@') ? data.authId : '')
+    const fields = hintToAccountFields({ ...id, email }, { email, oauthProvider: id.loginMethod })
     return finish(
       session,
       input('cursor', refresh, {
         email,
+        username: fields.username,
+        label: email || fields.label,
+        oauthProvider: fields.oauthProvider,
         customFields: {
           accessToken: access,
           sessionToken: refresh,
-          authId: data.authId || ''
+          authId: data.authId || '',
+          provider: fields.oauthProvider || ''
         }
       })
     )
@@ -466,6 +534,61 @@ async function completeKiro(session: Session, url: URL): Promise<AccountInput> {
         clientSecret: String(data.clientSecret || data.client_secret || ''),
         accessToken: String(data.accessToken || data.access_token || ''),
         provider: String(data.provider || data.loginProvider || loginOption)
+      }
+    })
+  )
+}
+
+async function completeAntigravity(session: Session, url: URL): Promise<AccountInput> {
+  if (session.state && url.searchParams.get('state') !== session.state) fail(session, 'OAuth state 校验失败')
+  const err = url.searchParams.get('error')
+  if (err) fail(session, `授权失败: ${err}`)
+  const code = url.searchParams.get('code')
+  if (!code) fail(session, '回调缺少 code')
+  const client = antigravityClient()
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: client.id,
+    client_secret: client.secret,
+    code,
+    redirect_uri: session.redirectUri || AG_REDIRECT
+  })
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body
+  })
+  const text = await res.text()
+  if (!res.ok) fail(session, `Antigravity 换票失败 HTTP ${res.status}`)
+  const data = JSON.parse(text) as { access_token?: string; refresh_token?: string; id_token?: string }
+  const refresh = data.refresh_token || ''
+  const access = data.access_token || ''
+  if (!refresh && !access) fail(session, 'Antigravity 未返回 token')
+  let email = ''
+  if (access) {
+    try {
+      const me = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { authorization: `Bearer ${access}` }
+      })
+      if (me.ok) {
+        const info = (await me.json()) as { email?: string }
+        email = info.email || ''
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!email && data.id_token) {
+    const claims = jwtPayload(data.id_token)
+    email = String(claims?.email || '')
+  }
+  return finish(
+    session,
+    input('antigravity', refresh || access, {
+      email,
+      customFields: {
+        accessToken: access,
+        provider: 'google'
       }
     })
   )

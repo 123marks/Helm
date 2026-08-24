@@ -24,7 +24,11 @@ import { mailboxKindLabel } from '@shared/mailboxAccount'
 import { estimatePasswordStrength, strengthLabel } from '@shared/security'
 import { api } from '@renderer/lib/api'
 import { formatTime, relativeTime } from '@renderer/lib/utils'
-import { platformMeta } from '@renderer/lib/platforms'
+import { hasLocalApply, hasQuota, localApplyLabel, platformMeta } from '@renderer/lib/platforms'
+import { IdentityPanel } from '@renderer/components/IdentityPanel'
+import { CopyableValue, copyValue } from '@renderer/components/CopyableValue'
+import { MembershipBadge } from '@renderer/components/MembershipBadge'
+import { QuotaPanel } from '@renderer/components/QuotaMeters'
 import { useAppStore } from '@renderer/store/app'
 import { useAccountsStore } from '@renderer/store/accounts'
 import { PlatformGlyph } from '@renderer/components/PlatformBadge'
@@ -41,22 +45,72 @@ import { Badge } from '@renderer/components/ui/badge'
 import { ScrollArea } from '@renderer/components/ui/scroll-area'
 import { SkeletonRows } from '@renderer/components/ui/skeleton'
 
-function Field({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
+function Field({
+  label,
+  value,
+  copyText,
+  secret,
+  copyable = true
+}: {
+  label: string
+  value?: React.ReactNode
+  copyText?: string
+  secret?: boolean
+  copyable?: boolean
+}): React.JSX.Element {
+  const raw = copyText ?? (typeof value === 'string' ? value : '')
+  const empty = (value == null || value === '') && !raw
   return (
-    <div className="flex items-start justify-between gap-4 py-1.5 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words text-right">{value || <span className="text-muted-foreground">—</span>}</span>
+    <div className="flex items-start justify-between gap-3 py-1.5 text-sm">
+      <span className="shrink-0 pt-1 text-muted-foreground">{label}</span>
+      {empty ? (
+        <span className="text-muted-foreground">—</span>
+      ) : copyable && raw ? (
+        <CopyableValue label={label} text={raw} secret={secret}>
+          {typeof value !== 'string' && value != null ? value : undefined}
+        </CopyableValue>
+      ) : (
+        <div className="min-w-0 max-w-full break-all text-right text-[11px] leading-relaxed text-foreground/80">
+          {value ?? raw}
+        </div>
+      )}
     </div>
   )
 }
 
 function copy(text: string | null | undefined, label: string): void {
-  if (!text) {
-    toast.error(`没有可复制的${label}`)
-    return
-  }
-  void navigator.clipboard.writeText(text)
-  toast.success(`${label}已复制`)
+  copyValue(text, label)
+}
+
+function DrawerAction({
+  icon: Icon,
+  label,
+  onClick,
+  primary,
+  danger,
+  title
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  onClick: () => void
+  primary?: boolean
+  danger?: boolean
+  title?: string
+}): React.JSX.Element {
+  return (
+    <Button
+      size="sm"
+      variant={primary ? 'default' : 'outline'}
+      title={title}
+      onClick={onClick}
+      className={`h-9 w-full justify-center px-2 text-xs ${
+        danger ? 'text-destructive hover:bg-destructive/10 hover:text-destructive' : ''
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </Button>
+  )
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -71,6 +125,7 @@ export function AccountDetailDrawer(): React.JSX.Element {
   const restore = useAccountsStore((s) => s.restore)
   const reloadAccounts = useAccountsStore((s) => s.load)
   const update = useAccountsStore((s) => s.update)
+  const replace = useAccountsStore((s) => s.replace)
 
   const account = accounts.find((a) => a.id === detailAccountId) ?? null
 
@@ -186,6 +241,17 @@ export function AccountDetailDrawer(): React.JSX.Element {
     else toast.error(r.message)
   }
 
+  const applyLocal = async (): Promise<void> => {
+    if (!account) return
+    try {
+      const r = await api.automation.applyLocal(account.id)
+      if (r.ok) toast.success(r.message)
+      else toast.error(r.message)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
   const strength = secrets?.password ? estimatePasswordStrength(secrets.password) : -1
   const sLabel = strength >= 0 ? strengthLabel(strength) : null
   const open = !!account
@@ -206,6 +272,9 @@ export function AccountDetailDrawer(): React.JSX.Element {
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                   {platformMeta(account.platform).label}
                   <AccountStatusBadge status={account.status} />
+                  {hasQuota(account.platform) && (
+                    <MembershipBadge platform={account.platform} quota={account.quota} />
+                  )}
                 </div>
               </div>
               <button
@@ -219,12 +288,30 @@ export function AccountDetailDrawer(): React.JSX.Element {
 
             <ScrollArea className="flex-1">
               <div className="p-5 pt-2">
+                {hasQuota(account.platform) ? (
+                  <QuotaPanel
+                    account={account}
+                    onRefresh={async () => {
+                      const next = await api.automation.refreshQuota(account.id)
+                      replace(next)
+                      if (next.quota?.error) toast.error(next.quota.error)
+                      else toast.success(next.quota?.plan ? `额度：${next.quota.plan}` : '额度已刷新')
+                    }}
+                  />
+                ) : (
+                  <IdentityPanel account={account} />
+                )}
+
                 <SectionTitle>账号信息</SectionTitle>
                 <div className="divide-y">
-                  <Field label="用户名" value={account.username} />
-                  <Field label="邮箱" value={account.email} />
-                  <Field label="收信方式" value={mailboxKindLabel(account.mailboxKind)} />
-                  <Field label="收信密码" value={account.hasMailboxPass ? '已配置' : '未配置'} />
+                  <Field label="用户名" value={account.username} copyText={account.username} />
+                  <Field label="邮箱" value={account.email} copyText={account.email} />
+                  <Field
+                    label="收信方式"
+                    value={mailboxKindLabel(account.mailboxKind)}
+                    copyText={mailboxKindLabel(account.mailboxKind)}
+                  />
+                  <Field label="收信密码" value={account.hasMailboxPass ? '已配置' : '未配置'} copyable={false} />
                   {account.oauthSourceAccountId && (
                     <Field
                       label="OAuth 来源"
@@ -257,10 +344,12 @@ export function AccountDetailDrawer(): React.JSX.Element {
                         </span>
                       ) : null
                     }
+                    copyText={account.tags.join(', ') || undefined}
                   />
                   <Field
                     label="代理"
                     value={account.proxyUrl ? <span className="font-mono text-xs">{account.proxyUrl}</span> : null}
+                    copyText={account.proxyUrl}
                   />
                   <Field
                     label="浏览器身份"
@@ -270,6 +359,9 @@ export function AccountDetailDrawer(): React.JSX.Element {
                           {[account.locale, account.timezone].filter(Boolean).join(' · ') || '自定义 UA'}
                         </span>
                       ) : null
+                    }
+                    copyText={
+                      [account.locale, account.timezone, account.userAgent].filter(Boolean).join(' · ') || undefined
                     }
                   />
                   <Field label="最近使用" value={relativeTime(account.lastUsedAt)} />
@@ -311,37 +403,31 @@ export function AccountDetailDrawer(): React.JSX.Element {
 
                 <SectionTitle>凭据</SectionTitle>
                 <div className="space-y-3">
-                  <div className="rounded-lg border p-3">
+                  <div className="group/secret rounded-lg border p-3">
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">密码</span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
+                      {secrets?.password && (
+                        <button
+                          type="button"
+                          className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/secret:opacity-100"
                           onClick={() => setRevealPw((v) => !v)}
                           title={revealPw ? '隐藏' : '显示'}
                           aria-label={revealPw ? '隐藏密码' : '显示密码'}
                         >
                           {revealPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => copy(secrets?.password, '密码')}
-                          title="复制"
-                          aria-label="复制密码"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        </button>
+                      )}
                     </div>
                     {secrets?.password ? (
                       <>
-                        <div className="font-mono text-sm break-all">
+                        <CopyableValue
+                          label="密码"
+                          text={secrets.password}
+                          align="left"
+                          className="text-sm"
+                        >
                           {revealPw ? secrets.password : '•'.repeat(Math.min(secrets.password.length, 24))}
-                        </div>
+                        </CopyableValue>
                         {sLabel && (
                           <div className="mt-2 flex items-center gap-2">
                             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
@@ -398,72 +484,56 @@ export function AccountDetailDrawer(): React.JSX.Element {
                   </div>
 
                   {account.hasBackupCodes && (
-                    <div className="rounded-lg border p-3">
+                    <div className="group/secret rounded-lg border p-3">
                       <div className="mb-1.5 flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">备用验证码</span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={revealCodes ? '隐藏备用码' : '显示备用码'}
-                            onClick={() => setRevealCodes((v) => !v)}
-                          >
-                            {revealCodes ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label="复制备用码"
-                            onClick={() => copy((secrets?.backupCodes ?? []).join('\n'), '备用码')}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <button
+                          type="button"
+                          className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/secret:opacity-100"
+                          aria-label={revealCodes ? '隐藏备用码' : '显示备用码'}
+                          title={revealCodes ? '隐藏' : '显示'}
+                          onClick={() => setRevealCodes((v) => !v)}
+                        >
+                          {revealCodes ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                       </div>
-                      {revealCodes ? (
-                        <div className="grid grid-cols-2 gap-1 font-mono text-xs">
-                          {(secrets?.backupCodes ?? []).map((c, i) => (
-                            <span key={i}>{c}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          {(secrets?.backupCodes ?? []).length} 个（已隐藏）
-                        </div>
-                      )}
+                      <CopyableValue
+                        label="备用码"
+                        text={(secrets?.backupCodes ?? []).join('\n') || undefined}
+                        align="left"
+                      >
+                        {revealCodes ? (
+                          <span className="grid grid-cols-2 gap-1 font-mono text-xs">
+                            {(secrets?.backupCodes ?? []).map((c, i) => (
+                              <span key={i}>{c}</span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="font-sans text-sm text-muted-foreground">
+                            {(secrets?.backupCodes ?? []).length} 个（悬停显示，点击复制）
+                          </span>
+                        )}
+                      </CopyableValue>
                     </div>
                   )}
 
                   {account.hasRefreshToken && (
-                    <div className="rounded-lg border p-3">
+                    <div className="group/secret rounded-lg border p-3">
                       <div className="mb-1.5 flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Refresh Token</span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={revealToken ? '隐藏 Token' : '显示 Token'}
-                            onClick={() => setRevealToken((v) => !v)}
-                          >
-                            {revealToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label="复制 Token"
-                            onClick={() => copy(secrets?.refreshToken, 'Token')}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <button
+                          type="button"
+                          className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/secret:opacity-100"
+                          aria-label={revealToken ? '隐藏 Token' : '显示 Token'}
+                          title={revealToken ? '隐藏' : '显示'}
+                          onClick={() => setRevealToken((v) => !v)}
+                        >
+                          {revealToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                       </div>
-                      <div className="font-mono text-xs break-all">
+                      <CopyableValue label="Token" text={secrets?.refreshToken} align="left">
                         {revealToken ? secrets?.refreshToken : '••••••••••••••••'}
-                      </div>
+                      </CopyableValue>
                     </div>
                   )}
                 </div>
@@ -493,24 +563,20 @@ export function AccountDetailDrawer(): React.JSX.Element {
                     ) : (
                       <div className="divide-y border-t">
                         {history.map((h) => (
-                          <div key={h.id} className="flex items-center gap-2 px-3 py-2">
-                            <span className="flex-1 font-mono text-xs">{h.preview}</span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {relativeTime(h.changedAt)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="复制"
+                          <div key={h.id} className="group/hist flex items-center gap-2 px-3 py-2">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left font-mono text-xs transition-colors hover:bg-primary/10"
+                              title="点击复制该历史密码"
                               onClick={() => void copyHistory(h.id)}
                             >
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
+                              {h.preview}
+                            </button>
+                            <span className="text-[11px] text-muted-foreground">{relativeTime(h.changedAt)}</span>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-7 w-7 opacity-0 transition-opacity group-hover/hist:opacity-100"
                               title="恢复为该密码"
                               onClick={() => void restoreHistory(h.id)}
                             >
@@ -524,8 +590,8 @@ export function AccountDetailDrawer(): React.JSX.Element {
 
                 <SectionTitle>恢复信息</SectionTitle>
                 <div className="divide-y">
-                  <Field label="恢复邮箱" value={account.recoveryEmail} />
-                  <Field label="恢复手机" value={account.recoveryPhone} />
+                  <Field label="恢复邮箱" value={account.recoveryEmail} copyText={account.recoveryEmail} />
+                  <Field label="恢复手机" value={account.recoveryPhone} copyText={account.recoveryPhone} />
                 </div>
 
                 {Object.keys(account.customFields).length > 0 && (
@@ -533,7 +599,13 @@ export function AccountDetailDrawer(): React.JSX.Element {
                     <SectionTitle>自定义字段</SectionTitle>
                     <div className="divide-y">
                       {Object.entries(account.customFields).map(([k, v]) => (
-                        <Field key={k} label={k} value={v} />
+                        <Field
+                          key={k}
+                          label={k}
+                          value={v}
+                          copyText={v}
+                          secret={/token|secret|cookie|key|password|auth/i.test(k)}
+                        />
                       ))}
                     </div>
                   </>
@@ -548,47 +620,57 @@ export function AccountDetailDrawer(): React.JSX.Element {
               </div>
             </ScrollArea>
 
-            <div className="flex flex-wrap items-center gap-2 border-t p-4">
-              <Button size="sm" onClick={() => void launchBrowser()} title="打开该账号的独立浏览器">
-                <Globe className="h-4 w-4" /> 打开浏览器
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setRunning(true)}>
-                <Play className="h-4 w-4" /> 运行自动化
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setMailOpen(true)}>
-                <Inbox className="h-4 w-4" /> 读信
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                title="用该账号的收信凭证创建邮箱服务，供批量注册收验证码"
-                onClick={() => {
-                  void api.providers
-                    .useAccountAsMailbox(account.id)
-                    .then(() => toast.success('已加入服务中心，可作默认收信源'))
-                    .catch((e) => toast.error((e as Error).message))
-                }}
-              >
-                <Mail className="h-4 w-4" /> 用作收信
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                <Pencil className="h-4 w-4" /> 编辑
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setCloning(true)}>
-                <Copy className="h-4 w-4" /> 克隆
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void api.system.revealProfile(account.id)}
-                title="打开该账号的浏览器配置目录"
-              >
-                <FolderOpen className="h-4 w-4" /> 配置目录
-              </Button>
-              <div className="flex-1" />
-              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void onDelete()}>
-                <Trash2 className="h-4 w-4" /> 删除
-              </Button>
+            <div className="border-t bg-muted/20 p-3">
+              <div className="grid grid-cols-4 gap-1.5">
+                {hasLocalApply(account.platform) ? (
+                  <DrawerAction
+                    icon={Play}
+                    label="应用到本地"
+                    primary
+                    title={`写入本地 ${localApplyLabel(account.platform)}`}
+                    onClick={() => void applyLocal()}
+                  />
+                ) : (
+                  <DrawerAction
+                    icon={Globe}
+                    label="打开浏览器"
+                    primary
+                    title="打开该账号的独立浏览器"
+                    onClick={() => void launchBrowser()}
+                  />
+                )}
+                {hasLocalApply(account.platform) ? (
+                  <DrawerAction
+                    icon={Globe}
+                    label="打开浏览器"
+                    title="打开该账号的独立浏览器"
+                    onClick={() => void launchBrowser()}
+                  />
+                ) : (
+                  <DrawerAction icon={Play} label="运行自动化" onClick={() => setRunning(true)} />
+                )}
+                <DrawerAction icon={Inbox} label="读信" onClick={() => setMailOpen(true)} />
+                <DrawerAction
+                  icon={Mail}
+                  label="用作收信"
+                  title="用该账号的收信凭证创建邮箱服务，供批量注册收验证码"
+                  onClick={() => {
+                    void api.providers
+                      .useAccountAsMailbox(account.id)
+                      .then(() => toast.success('已加入服务中心，可作默认收信源'))
+                      .catch((e) => toast.error((e as Error).message))
+                  }}
+                />
+                <DrawerAction icon={Pencil} label="编辑" onClick={() => setEditing(true)} />
+                <DrawerAction icon={Copy} label="克隆" onClick={() => setCloning(true)} />
+                <DrawerAction
+                  icon={FolderOpen}
+                  label="配置目录"
+                  title="打开该账号的浏览器配置目录"
+                  onClick={() => void api.system.revealProfile(account.id)}
+                />
+                <DrawerAction icon={Trash2} label="删除" danger onClick={() => void onDelete()} />
+              </div>
             </div>
           </SheetContent>
         )}

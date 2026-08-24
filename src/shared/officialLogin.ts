@@ -13,7 +13,9 @@ export const OFFICIAL_LOGIN: Partial<Record<Platform, string>> = {
   anthropic: 'https://claude.ai/login',
   cursor: 'https://authenticator.cursor.sh/sign-in',
   windsurf: 'https://windsurf.com/account/login',
-  kiro: 'https://app.kiro.dev'
+  kiro: 'https://app.kiro.dev/signin',
+  grok: 'https://accounts.x.ai/sign-in',
+  antigravity: 'https://antigravity.google'
 }
 
 export function officialLoginUrl(platform: Platform): string {

@@ -14,7 +14,62 @@ export type Platform =
   | 'cursor'
   | 'windsurf'
   | 'kiro'
+  | 'grok'
+  | 'antigravity'
   | 'custom'
+
+export type PlanKind =
+  | 'free'
+  | 'lite'
+  | 'go'
+  | 'plus'
+  | 'pro'
+  | 'pro_plus'
+  | 'pro_max'
+  | 'max'
+  | 'ultra'
+  | 'power'
+  | 'team'
+  | 'enterprise'
+  | 'unknown'
+
+/**
+ * Well-known meters get a stable id so the UI can order them; platforms that
+ * expose per-model quota (Antigravity) mint ids like `model:gemini-3-pro:5h`.
+ */
+export type QuotaMeterId =
+  | 'included'
+  | 'premium'
+  | 'ondemand'
+  | 'weekly'
+  | 'api'
+  | 'claude_5h'
+  | 'claude_week'
+  | 'gemini_5h'
+  | 'gemini_week'
+  | 'credits'
+  | (string & {})
+
+/** One quota pool. Never merge 基础 and 高级 into a single used/limit. */
+export interface QuotaMeter {
+  id: QuotaMeterId
+  label: string
+  used: number | null
+  limit: number | null
+  unit: string
+  resetAt: number | null
+  unlimited?: boolean
+  /** Absolute figures behind the percentage, e.g. `$90.36 / $400.00`. */
+  note?: string
+  /** Longer explanation, hidden when the user turns quota hints off. */
+  hint?: string
+  /** Optional column this meter belongs to, e.g. `claude` / `gemini`. */
+  group?: string
+  /** Per-model rows are hidden behind a toggle so cards stay compact. */
+  detail?: boolean
+  /** A status line rather than a pool: always shown, rendered without a bar. */
+  info?: boolean
+}
 
 export type AccountStatus = 'active' | 'disabled' | 'error'
 
@@ -59,12 +114,35 @@ export interface Account {
 
 export interface AccountQuota {
   plan: string
+  planKind?: PlanKind
+  loginMethod?: string
+  /** Primary = 基础额度 only. Do not store 基础+高级合计. */
   used: number | null
   limit: number | null
   unit: string
   resetAt: number | null
+  meters?: QuotaMeter[]
+  expiresAt?: number | null
+  email?: string
+  /** Which client the quota belongs to, e.g. `Antigravity IDE`. */
+  surface?: string
   error: string
   fetchedAt: number
+}
+
+/**
+ * Progress of a quota fetch pushed from the main process.
+ * `batch` = user pressed refresh, `auto` = right after a new account was saved,
+ * `sweep` = background staleness poll.
+ */
+export interface QuotaSyncEvent {
+  accountId: string
+  reason: 'batch' | 'auto' | 'sweep'
+  phase: 'start' | 'done' | 'error'
+  account?: Account
+  message?: string
+  done?: number
+  total?: number
 }
 
 /** Official browser OAuth session (Cursor poll / OpenAI·Kiro·Windsurf localhost callback). */
@@ -306,8 +384,26 @@ export interface AppSettings {
   cdpEndpoint: string
   language: 'zh' | 'en'
   theme: 'light' | 'dark' | 'system'
+  /** 额度条下方的官方说明（套餐内用量 / 免费档限制等） */
+  showQuotaHints: boolean
+  /** 后台轮询所有账号额度的间隔，单位分钟；0 表示关闭。 */
+  quotaAutoRefreshMinutes: number
   slowMo: number
   skipUpdateVersion: string
+}
+
+export interface LocalApplyResult {
+  ok: boolean
+  targets: string[]
+  running: string[]
+  message: string
+}
+
+export interface LocalLoginSnapshot {
+  current: Partial<Record<Platform, string>>
+  running: Partial<Record<Platform, boolean>>
+  imported: Account[]
+  unmatched: { platform: Platform; email: string; source: string }[]
 }
 
 export interface ChromeInfo {
@@ -397,12 +493,18 @@ export interface Api {
     importCookies(accountId: string, json: string): Promise<{ imported: number }>
     refreshQuota(accountId: string): Promise<Account>
     refreshQuotas(accountIds: string[]): Promise<Account[]>
+    captureSession(accountId: string): Promise<Account>
+    /** Write this account into the local IDE / CLI login (Cursor state.vscdb, Codex auth.json, …). */
+    applyLocal(accountId: string): Promise<LocalApplyResult>
+    syncLocal(): Promise<LocalLoginSnapshot>
     onTaskUpdated(cb: (task: AutomationTask) => void): () => void
+    onQuotaUpdated(cb: (event: QuotaSyncEvent) => void): () => void
   }
   oauth: {
     start(platform: Platform): Promise<OfficialOAuthStart>
     snapshot(loginId: string): Promise<OfficialOAuthStart>
-    wait(loginId: string): Promise<AccountInput>
+    /** Null when the user cancelled the dialog before authorizing. */
+    wait(loginId: string): Promise<AccountInput | null>
     submitCallback(loginId: string, url: string): Promise<AccountInput>
     cancel(loginId?: string): Promise<void>
     openUrl(url: string): Promise<void>

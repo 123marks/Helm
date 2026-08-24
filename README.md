@@ -1,23 +1,26 @@
-# AI-AccountManager
+# Helm
 
-[![Release](https://img.shields.io/github/v/release/123marks/Account-Management?color=7B6CFF)](https://github.com/123marks/Account-Management/releases/latest)
+[![Release](https://img.shields.io/github/v/release/123marks/Helm?color=7B6CFF)](https://github.com/123marks/Helm/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/123marks/Account-Management/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/123marks/Helm/releases)
 
-> 多平台账号安全管理与浏览器自动化桌面工具 —— 集中管理 Google / GitHub / X(Twitter) / YouTube 等账号的密码、2FA、恢复信息，并用 **Playwright 驱动本地 Chrome** 完成改密码 / 改恢复信息 / 登录检测等自动化操作。
+> **AI 订阅账号的驾驶舱。** 一个地方看清 Cursor / ChatGPT / Claude / Kiro / Windsurf / Grok / Antigravity 的会员档位与剩余额度，顺带把 Google / GitHub / X 等身份账号的密码、2FA、恢复信息管起来，并用 **Playwright 驱动本地 Chrome** 完成改密码 / 改恢复信息 / 注册等自动化。
 >
 > Electron + React + TypeScript + Playwright · 凭据本地加密 · 开源 (MIT)
 
-交流反馈：[Releases](https://github.com/123marks/Account-Management/releases) · QQ 群 `1070080897`（下方有二维码）
+交流反馈：[Releases](https://github.com/123marks/Helm/releases) · QQ 群 `1070080897`（下方有二维码）
 
 <p align="center">
-  <img src="docs/images/accounts.png" alt="AI Account Manager 账号管理" width="920" />
+  <img src="docs/images/accounts.png" alt="Helm 账号管理" width="920" />
 </p>
 
 ---
 
 ## ✨ 功能特性
 
+- **额度总览（Cockpit）**：全平台订阅额度一屏看完 —— KPI、平台聚合、告警清单、重置倒计时，支持后台按间隔自动刷新。
+- **会员档位识别**：内置各平台官方档位目录（Cursor Hobby/Pro/Pro+/Ultra/Teams、ChatGPT Free/Go/Plus/Pro/Business、Claude Pro/Max 5×/Max 20×/Team、Kiro Free→Power、Windsurf、SuperGrok、Google AI Plus/Pro/Ultra），卡片直接显示档位、价格与它到底买到了什么。
+- **授权即出数**：OAuth / Token 导入完成后主进程自动拉一次额度，不用再手动点刷新。
 - **多账号集中管理**：Google / GitHub / X / YouTube / OpenAI / Cursor 等，支持分组、标签、搜索、批量选择。
 - **凭据加密存储**：密码、2FA 密钥、备用码、Refresh Token 使用 **AES-256-GCM** 加密，主密钥由操作系统钥匙串（`safeStorage`）封存。
 - **全局脱敏**：顶栏小眼睛 / `Ctrl+Shift+H` 统一隐藏密码、2FA、手机号；列表内可复制、可编辑。
@@ -30,7 +33,7 @@
 
 ## ⬇️ 下载安装
 
-前往 [**Releases**](https://github.com/123marks/Account-Management/releases) 下载对应系统的安装包：
+前往 [**Releases**](https://github.com/123marks/Helm/releases) 下载对应系统的安装包：
 
 | 系统 | 推荐下载 | 其他格式 |
 |---|---|---|
@@ -44,11 +47,11 @@
 
 运行前置条件：本机已安装 **Google Chrome**（自动化功能依赖它，应用本身不内置 Chromium）。
 
-安装包未做代码签名：Windows 出现 SmartScreen 时选「更多信息 → 仍要运行」；macOS 首次请右键 → 打开，或执行 `xattr -cr "/Applications/AI Account Manager.app"`。开发者购买证书后的配置方法见 [`docs/RELEASE.md`](docs/RELEASE.md#代码签名)。
+安装包未做代码签名：Windows 出现 SmartScreen 时选「更多信息 → 仍要运行」；macOS 首次请右键 → 打开，或执行 `xattr -cr "/Applications/Helm.app"`。开发者购买证书后的配置方法见 [`docs/RELEASE.md`](docs/RELEASE.md#代码签名)。
 
 ## 💬 交流群
 
-扫码或搜索群号加入，反馈问题、交流用法。群名 **AI-AccountManager 交流群**，群号 **`1070080897`**。
+扫码或搜索群号加入，反馈问题、交流用法。群名 **Helm 技术交流群**，群号 **`1070080897`**。
 
 <p align="center">
   <img src="docs/qq-group.png" alt="QQ 交流群 1070080897" width="360" />
@@ -101,7 +104,9 @@ npm run dist:linux # 打 Linux AppImage / deb / tar.gz
 </p>
 <p align="center"><b>自动化</b> · Playwright 驱动本地 Chrome · 并发任务</p>
 
-首次运行会在系统 userData 目录初始化本地数据库与加密主密钥。其他页面：仪表盘、安全中心、2FA 中心、日志、设置。
+首次运行会在系统 userData 目录初始化本地数据库与加密主密钥。其他页面：仪表盘、额度总览、安全中心、2FA 中心、日志、设置。
+
+> 从旧版 AI-AccountManager 升级：首次启动会自动把旧数据目录（`%APPDATA%/AI Account Manager` 或 `ai-account-manager`）里的数据库、主密钥与浏览器配置迁移到 Helm 目录，旧目录保留为备份。
 
 ## 📂 项目结构与文档
 

@@ -1,6 +1,12 @@
 import { ipcMain } from 'electron'
 import { IPC } from '@shared/ipc'
-import type { EnqueueRequest, Platform, RegisterDraft, RegisterPrepareInput } from '@shared/types'
+import type {
+  EnqueueRequest,
+  Platform,
+  QuotaSyncEvent,
+  RegisterDraft,
+  RegisterPrepareInput
+} from '@shared/types'
 import { actionsFor, oauthRegisterablePlatforms, registerablePlatforms } from '../automation/flows/registry'
 import { cancel, enqueue, retry, isAccountBusy } from '../automation/engine'
 import {
@@ -19,6 +25,9 @@ import { resolveProxy, socksAuthUnsupported, SOCKS_AUTH_MESSAGE, probeProxy } fr
 import { listTasks, deleteTask, deleteFinishedTasks } from '../db/repositories/tasks'
 import { getAccount, touchLastUsed } from '../db/repositories/accounts'
 import { refreshAccountQuota, refreshAccountQuotas } from '../services/quota'
+import { captureSessionFromProfile } from '../services/sessionSync'
+import { applyAccountLocal } from '../services/localApply'
+import { syncLocalLogins } from '../services/localSession'
 import { requireUnlocked } from '../services/lock'
 import { logger } from '../services/logger'
 
@@ -122,5 +131,29 @@ export function registerAutomationIpc(): void {
     return { imported }
   })
   ipcMain.handle(IPC.automation.refreshQuota, (_e, accountId: string) => refreshAccountQuota(accountId))
-  ipcMain.handle(IPC.automation.refreshQuotas, (_e, accountIds: string[]) => refreshAccountQuotas(accountIds))
+  ipcMain.handle(IPC.automation.refreshQuotas, (e, accountIds: string[]) =>
+    refreshAccountQuotas(accountIds, {
+      onProgress: ({ account, done, total }) =>
+        e.sender.send(IPC.automation.quotaUpdated, {
+          accountId: account.id,
+          reason: 'batch',
+          phase: 'done',
+          account,
+          done,
+          total
+        } satisfies QuotaSyncEvent)
+    })
+  )
+  ipcMain.handle(IPC.automation.captureSession, async (_e, accountId: string) => {
+    requireUnlocked()
+    const acc = getAccount(accountId)
+    if (!acc) throw new Error('账号不存在')
+    if (isProfileBusy(acc.profileDir)) throw new Error('请先关掉该账号的浏览器窗口，再点「我已登录」')
+    if (isAccountBusy(accountId)) throw new Error('该账号有自动化任务在运行，请稍后再试')
+    const next = await captureSessionFromProfile(accountId)
+    if (!next) throw new Error('抓取会话失败')
+    return next
+  })
+  ipcMain.handle(IPC.automation.applyLocal, (_e, accountId: string) => applyAccountLocal(accountId))
+  ipcMain.handle(IPC.automation.syncLocal, () => syncLocalLogins())
 }

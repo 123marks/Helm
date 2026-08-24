@@ -56,6 +56,8 @@ const PLATFORM_ORDER: Platform[] = [
   'cursor',
   'windsurf',
   'kiro',
+  'grok',
+  'antigravity',
   'custom'
 ]
 

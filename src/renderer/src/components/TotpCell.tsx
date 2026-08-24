@@ -49,7 +49,7 @@ export function TotpCell({
           void navigator.clipboard.writeText(data.code)
           toast.success('验证码已复制')
         }}
-        className="group inline-flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group inline-flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <svg width="22" height="22" viewBox="0 0 22 22" className="shrink-0 -rotate-90">
           <circle cx="11" cy="11" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="2.5" />
@@ -78,6 +78,7 @@ export function TotpCell({
         <span className="w-4 text-right text-[11px] tabular-nums text-muted-foreground">
           {data.remainingSeconds}
         </span>
+        <span className="text-[10px] text-primary opacity-0 transition-opacity group-hover:opacity-100">复制</span>
       </button>
       {onEditSecret && (
         <button type="button" title="编辑 2FA 密钥" onClick={onEditSecret} className="text-muted-foreground/50">

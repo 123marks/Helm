@@ -82,7 +82,7 @@ export function UpdateCard(): React.JSX.Element {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => window.open('https://github.com/123marks/Account-Management/releases', '_blank')}
+            onClick={() => window.open('https://github.com/123marks/Helm/releases', '_blank')}
           >
             打开 Releases
           </Button>

@@ -112,7 +112,7 @@ export const githubFlows: Flow[] = [checkLogin, changePassword, changeRecovery]
 - **未检测到 Chrome**：设置页手动填 Chrome 路径；或用 CDP 模式连接已开启 `--remote-debugging-port=9222` 的 Chrome。
 - **Google/X 登录失败**：多为验证码/设备验证/风控。关闭「无头模式」，在弹出的浏览器里手动完成一次登录（会写入该账号 profile），之后再跑自动化即可复用登录态。
 - **自动化点不到元素**：平台改版导致选择器失效。到对应 `flows/<platform>.ts` 更新选择器；失败截图在 `userData/screenshots/`，日志在「日志」页按 taskId 过滤。
-- **userData 位置**：Windows 为 `%APPDATA%/ai-account-manager`。数据库、日志、profiles、master.key 均在此。
+- **userData 位置**：Windows 为 `%APPDATA%/Helm`（旧版 `%APPDATA%/ai-account-manager` 会在首次启动时自动迁移）。数据库、日志、profiles、master.key 均在此。
 
 ## 9. 代码规范
 
