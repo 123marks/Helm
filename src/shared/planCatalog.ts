@@ -419,3 +419,20 @@ export function resolvePlanTier(platform: Platform, plan: string): PlanTier | nu
 export function planTierById(platform: Platform, id: string): PlanTier | null {
   return planTiers(platform).find((t) => t.id === id) ?? null
 }
+
+/**
+ * Monthly list price in USD, derived from `price` so the figure never drifts
+ * from the label. Null for free tiers and anything quoted as "定制".
+ */
+export function tierMonthlyUsd(tier: PlanTier | null): number | null {
+  if (!tier?.price) return null
+  if (tier.price.includes('免费')) return 0
+  const match = /\$\s*([\d.]+)/.exec(tier.price)
+  if (!match) return null
+  const value = Number(match[1])
+  return Number.isFinite(value) ? value : null
+}
+
+export function planMonthlyUsd(platform: Platform, plan: string): number | null {
+  return tierMonthlyUsd(resolvePlanTier(platform, plan))
+}

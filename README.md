@@ -18,7 +18,8 @@
 
 ## ✨ 功能特性
 
-- **额度总览（Cockpit）**：全平台订阅额度一屏看完 —— KPI、平台聚合、告警清单、重置倒计时，支持后台按间隔自动刷新。
+- **额度总览（Cockpit）**：全平台订阅额度一屏看完 —— 月订阅成本、平均用量、告警清单、重置倒计时、平台聚合，支持后台按间隔自动刷新。
+- **使用趋势**：每次查询都留一条快照，画出 24h / 7d / 30d / 90d 的用量曲线，总体与各平台分线可切换。
 - **会员档位识别**：内置各平台官方档位目录（Cursor Hobby/Pro/Pro+/Ultra/Teams、ChatGPT Free/Go/Plus/Pro/Business、Claude Pro/Max 5×/Max 20×/Team、Kiro Free→Power、Windsurf、SuperGrok、Google AI Plus/Pro/Ultra），卡片直接显示档位、价格与它到底买到了什么。
 - **授权即出数**：OAuth / Token 导入完成后主进程自动拉一次额度，不用再手动点刷新。
 - **多账号集中管理**：Google / GitHub / X / YouTube / OpenAI / Cursor 等，支持分组、标签、搜索、批量选择。
@@ -75,8 +76,11 @@
 
 ```bash
 npm install
-npm run dev        # 开发模式（Vite HMR + Electron）
+cp .env.example .env   # 可选：填 Antigravity 的 OAuth 凭据
+npm run dev            # 开发模式（Vite HMR + Electron）
 ```
+
+> `.env` 只影响 Antigravity 的「OAuth 授权」入口。留空不影响其他平台，Antigravity 仍可在「Token / JSON」页粘 `refresh_token` 或 `oauth_creds.json` 添加。
 
 其他命令：
 

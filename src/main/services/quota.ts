@@ -8,6 +8,8 @@ import { getAccount, revealSecrets, updateAccount } from '../db/repositories/acc
 import { applySessionToProfile, captureSessionFromProfile } from './sessionSync'
 import { enrichAccountIdentity } from './identity'
 import { AG_META, antigravityClient } from './antigravityOAuth'
+import { recordQuotaSnapshot } from '../db/repositories/quotaHistory'
+import { logger } from './logger'
 
 type Cookie = { name: string; value: string; domain: string }
 
@@ -999,7 +1001,13 @@ async function refreshAccountQuotaInner(
     quota,
     ...(email && email !== accNow.email ? { email, label: accNow.email ? accNow.label : email } : {})
   })
-  return (await enrichAccountIdentity(accountId)) || saved
+  const enriched = (await enrichAccountIdentity(accountId)) || saved
+  try {
+    recordQuotaSnapshot(enriched)
+  } catch (e) {
+    logger.warn('quota', `额度快照写入失败: ${(e as Error).message}`, { accountId })
+  }
+  return enriched
 }
 
 export type QuotaProgress = {

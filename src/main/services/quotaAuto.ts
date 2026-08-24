@@ -3,6 +3,7 @@ import { IPC } from '@shared/ipc'
 import type { Account, QuotaSyncEvent } from '@shared/types'
 import { hasQuota } from '@shared/platformFlags'
 import { getAccount, listAccounts, revealSecrets } from '../db/repositories/accounts'
+import { pruneQuotaSnapshots } from '../db/repositories/quotaHistory'
 import { refreshAccountQuota, refreshAccountQuotas } from './quota'
 import { getSettings } from './settings'
 import { logger } from './logger'
@@ -82,6 +83,12 @@ async function sweep(): Promise<void> {
 /** Re-check every minute; each account is only re-fetched once it goes stale. */
 export function startQuotaAutoRefresh(): void {
   if (timer) return
+  try {
+    const dropped = pruneQuotaSnapshots()
+    if (dropped > 0) logger.info('quota', `清理了 ${dropped} 条过期额度快照`)
+  } catch {
+    /* history is best-effort */
+  }
   timer = setInterval(() => void sweep(), 60_000)
   setTimeout(() => void sweep(), 15_000)
 }

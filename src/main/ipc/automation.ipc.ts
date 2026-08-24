@@ -24,6 +24,7 @@ import {
 import { resolveProxy, socksAuthUnsupported, SOCKS_AUTH_MESSAGE, probeProxy } from '../automation/proxy'
 import { listTasks, deleteTask, deleteFinishedTasks } from '../db/repositories/tasks'
 import { getAccount, touchLastUsed } from '../db/repositories/accounts'
+import { quotaHistory } from '../db/repositories/quotaHistory'
 import { refreshAccountQuota, refreshAccountQuotas } from '../services/quota'
 import { captureSessionFromProfile } from '../services/sessionSync'
 import { applyAccountLocal } from '../services/localApply'
@@ -144,6 +145,7 @@ export function registerAutomationIpc(): void {
         } satisfies QuotaSyncEvent)
     })
   )
+  ipcMain.handle(IPC.automation.quotaHistory, (_e, days: number) => quotaHistory(days))
   ipcMain.handle(IPC.automation.captureSession, async (_e, accountId: string) => {
     requireUnlocked()
     const acc = getAccount(accountId)

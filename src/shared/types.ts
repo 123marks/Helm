@@ -130,6 +130,21 @@ export interface AccountQuota {
   fetchedAt: number
 }
 
+export interface QuotaHistoryPoint {
+  ts: number
+  /** Mean usage across every account sampled in this bucket, 0–100. */
+  average: number | null
+  samples: number
+  byPlatform: Record<string, number | null>
+}
+
+export interface QuotaHistorySeries {
+  days: number
+  stepMs: number
+  platforms: string[]
+  points: QuotaHistoryPoint[]
+}
+
 /**
  * Progress of a quota fetch pushed from the main process.
  * `batch` = user pressed refresh, `auto` = right after a new account was saved,
@@ -493,6 +508,8 @@ export interface Api {
     importCookies(accountId: string, json: string): Promise<{ imported: number }>
     refreshQuota(accountId: string): Promise<Account>
     refreshQuotas(accountIds: string[]): Promise<Account[]>
+    /** Averaged usage over the last `days`, for the cockpit trend chart. */
+    quotaHistory(days: number): Promise<QuotaHistorySeries>
     captureSession(accountId: string): Promise<Account>
     /** Write this account into the local IDE / CLI login (Cursor state.vscdb, Codex auth.json, …). */
     applyLocal(accountId: string): Promise<LocalApplyResult>

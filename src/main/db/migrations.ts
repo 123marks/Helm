@@ -218,6 +218,29 @@ const MIGRATIONS: Migration[] = [
   {
     version: 15,
     sql: `ALTER TABLE accounts ADD COLUMN quota_json TEXT;`
+  },
+  {
+    version: 16,
+    // One row per successful quota fetch, so the cockpit can draw usage over
+    // time. `percent` is the account's worst pool at that moment; `meters_json`
+    // keeps the per-pool detail for drill-down.
+    sql: `
+      CREATE TABLE quota_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        ts INTEGER NOT NULL,
+        plan TEXT NOT NULL DEFAULT '',
+        plan_kind TEXT NOT NULL DEFAULT '',
+        percent REAL,
+        used REAL,
+        quota_limit REAL,
+        unit TEXT NOT NULL DEFAULT '',
+        meters_json TEXT
+      );
+      CREATE INDEX idx_quota_snapshots_ts ON quota_snapshots(ts);
+      CREATE INDEX idx_quota_snapshots_account ON quota_snapshots(account_id, ts);
+    `
   }
 ]
 

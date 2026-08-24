@@ -3,12 +3,16 @@
 ## 0.3.0
 
 - **项目更名 Helm**：应用名、安装包、快捷方式、GitHub 仓库同步改名；首次启动自动把旧数据目录（`AI Account Manager` / `ai-account-manager`）的数据库、`master.key`、`Local State`、浏览器配置迁移过来，旧目录保留为备份，并修正账号里存的绝对 profile 路径
-- **新增「额度总览」页**：KPI（监控账号数 / 平均用量 / 告警数 / 最近重置倒计时）、平台聚合条、需要关注清单、全账号用量表（按用量 / 重置 / 查询时间 / 套餐 / 平台排序，可按状态筛选），支持整页或单账号刷新
+- **新增「额度总览」页**：Hero 汇总卡（月订阅成本 / 平均用量 / 告警数 / 最近重置倒计时 / 查询失败数）+ 四个可点筛选的状态块、平台聚合条、需要关注清单、全账号用量表（按用量 / 重置 / 查询时间 / 月成本 / 套餐 / 平台排序，可按状态筛选），支持整页或单账号刷新
+- **额度历史与使用趋势**：每次成功查询都写一条快照（同账号 5 分钟内合并，保留 120 天），总览页画出 24h / 7d / 30d / 90d 的用量趋势，总体与各平台分线、图例可点击隐藏、悬停看具体数值
+- **月订阅成本**：按档位公开价目累加，卡片与表格都能看到每个号、每个平台一个月值多少钱
 - **授权后额度自动出数**：主进程在账号创建或换 Token 后立即后台拉一次额度并推给界面，不必再手点刷新；另有可配置的后台轮询（默认 30 分钟，只刷过期的账号）
 - **会员档位重做**：新增各平台官方档位目录（Cursor Hobby/Pro/Pro+/Ultra/Teams Standard·Premium/Enterprise、ChatGPT Free/Go/Plus/Pro/Business/Enterprise、Claude Free/Pro/Max 5×/Max 20×/Team·Premium/Enterprise、Kiro Free/Pro/Pro+/Pro Max/Power、Windsurf、SuperGrok Lite/SuperGrok/Plus/Heavy、Google AI Plus/Pro/Ultra 5×·20×），卡片显示档位名、公开价格与该档到底买到什么
 - **Antigravity 正名**：不再叫「反重力」；区分 Antigravity IDE 与 Antigravity 2.0，套餐按 Google AI 订阅体系显示；额度新增「按模型额度」折叠区（每个模型的 5h / Weekly 剩余）
 - Cursor 额度贴近官方 Usage 面板：Total Usage / Auto + Composer / API Usage 直接带 `$x / $y` 绝对值，按需使用未开启时显式显示「已禁用」，无上限时显示为不限量而非天文数字
 - 布局统一：卡片头部与面板等高、同一网格内卡片等高、徽章尺寸与间距一致；仪表盘与额度总览共用同一套 KPI 卡；仪表盘新增额度告警入口
+- Antigravity 的 Google OAuth 客户端凭据移出源码，改为构建时从环境注入（见 `.env.example`），仓库不再携带不属于本项目的凭据
+- 关闭添加账号弹窗不再在主进程打出 `oauth:wait` 错误日志：用户主动取消视为正常结束
 - 添加账号默认走官方授权：Google / GitHub / Apple / 微软 / X 等 SSO，不必先填账密；Cursor / OpenAI / Kiro / Windsurf 仍走专用 OAuth
 - 新增 Grok（xAI）：官方登录、xai- Key / Cookie JSON、订阅额度
 - Cursor 额度对齐官方 Usage：Total / Auto + Composer / API，按需用量仅在开启且有消耗时显示；不再误标「基础/高级 0/0」

@@ -71,6 +71,7 @@ const api: Api = {
     importCookies: (accountId, json) => ipcRenderer.invoke(IPC.automation.importCookies, accountId, json),
     refreshQuota: (accountId) => ipcRenderer.invoke(IPC.automation.refreshQuota, accountId),
     refreshQuotas: (accountIds) => ipcRenderer.invoke(IPC.automation.refreshQuotas, accountIds),
+    quotaHistory: (days) => ipcRenderer.invoke(IPC.automation.quotaHistory, days),
     captureSession: (accountId) => ipcRenderer.invoke(IPC.automation.captureSession, accountId),
     applyLocal: (accountId) => ipcRenderer.invoke(IPC.automation.applyLocal, accountId),
     syncLocal: () => ipcRenderer.invoke(IPC.automation.syncLocal),
