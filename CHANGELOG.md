@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- **新增 Outlook 邮箱池**：导入现成微软号 combo（`email----password----clientId----refreshToken`，可选 + 恢复邮箱两段，兼容四段/六段），在「服务中心 · 邮箱」里统一管理——状态/用量统计、批量保活（刷新 refresh_token，`invalid_grant` 自动标死号）、导出四段/六段、一键「取号建账」直接把现成号建进微软账号库（秒级、无浏览器、无需打码）
+- **Outlook 池打通批量注册**：批量注册新增「Outlook 池现成号」收信来源——用池里的微软邮箱给 ChatGPT 等平台收验证码，把「微软邮箱」和「GPT 注册」两个项目的价值串成一条闭环
+- **可选后台保活**：设置里可开「Outlook 池令牌保活」间隔，后台只刷新到期的号，限速执行
+- 接码稳健性：`waitForSmsCode` 不再因一次临时网络抖动就退掉已付费的号码，改为继续轮询、仅在致命错误（号码被取消/Key 失效/记录不存在/封号）或超时才结束
+- Outlook OAuth2 IMAP 兜底读信新增扫「垃圾邮件」文件夹——新号验证邮件常落 Junk，避免收不到码
+
 ## 0.3.0
 
 - **项目更名 Helm**：应用名、安装包、快捷方式、GitHub 仓库同步改名；首次启动自动把旧数据目录（`AI Account Manager` / `ai-account-manager`）的数据库、`master.key`、`Local State`、浏览器配置迁移过来，旧目录保留为备份，并修正账号里存的绝对 profile 路径
