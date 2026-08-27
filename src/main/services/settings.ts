@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   showQuotaHints: true,
   quotaAutoRefreshMinutes: 30,
+  outlookKeepaliveHours: 0,
   slowMo: 50,
   skipUpdateVersion: ''
 }
@@ -50,6 +51,9 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
       1440,
       DEFAULT_SETTINGS.quotaAutoRefreshMinutes
     )
+  }
+  if (clean.outlookKeepaliveHours !== undefined) {
+    clean.outlookKeepaliveHours = clampInt(clean.outlookKeepaliveHours, 0, 720, DEFAULT_SETTINGS.outlookKeepaliveHours)
   }
 
   const stmt = getDb().prepare(

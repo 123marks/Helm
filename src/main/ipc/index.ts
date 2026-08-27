@@ -10,6 +10,7 @@ import { registerSettingsIpc } from './settings.ipc'
 import { registerSystemIpc } from './system.ipc'
 import { registerSecurityIpc } from './security.ipc'
 import { registerProvidersIpc } from './providers.ipc'
+import { registerOutlookPoolIpc } from './outlookPool.ipc'
 import { registerLockIpc } from './lock.ipc'
 import { registerSmsIpc } from './sms.ipc'
 import { registerUpdaterIpc } from './updater.ipc'
@@ -26,6 +27,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   registerSystemIpc(getWindow)
   registerSecurityIpc()
   registerProvidersIpc()
+  registerOutlookPoolIpc()
   registerLockIpc()
   registerSmsIpc()
   registerUpdaterIpc()

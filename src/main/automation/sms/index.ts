@@ -51,6 +51,18 @@ export async function rentNumber(opts: {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * A polling error we must NOT keep retrying on: the rental is gone, the key is
+ * bad, or the number was cancelled/banned. Everything else (network blips,
+ * timeouts, 5xx, rate limits, non-JSON) is transient — a paid number is already
+ * rented, so we keep waiting instead of throwing it away.
+ */
+function isFatalSmsError(message: string): boolean {
+  return /API Key 无效|不属于当前 Key|记录不存在|已取消该号码|被平台封禁|BAD_KEY|NO_ACTIVATION|STATUS_CANCEL|BANNED/i.test(
+    message
+  )
+}
+
 export async function waitForSmsCode(
   rentalId: string,
   opts?: { timeoutMs?: number; signal?: AbortSignal }
@@ -61,10 +73,20 @@ export async function waitForSmsCode(
   const timeout = opts?.timeoutMs ?? 180000
   const start = Date.now()
   let received = false
+  let lastTransient = ''
   try {
     while (Date.now() - start < timeout) {
       if (opts?.signal?.aborted) throw new Error('已取消')
-      const code = await r.driver.fetchCode({ config: r.config, signal: opts?.signal }, row.remoteId)
+      let code: string | null = null
+      try {
+        code = await r.driver.fetchCode({ config: r.config, signal: opts?.signal }, row.remoteId)
+      } catch (err) {
+        const msg = (err as Error).message || ''
+        // A fatal condition means the number is unusable — stop and release it.
+        if (isFatalSmsError(msg)) throw err
+        // Otherwise the number is still ours; note the blip and keep polling.
+        lastTransient = msg
+      }
       if (code) {
         received = true
         updateRental(rentalId, { status: 'code_received', code })
@@ -74,7 +96,11 @@ export async function waitForSmsCode(
       }
       await sleep(5000)
     }
-    throw new Error(`等待短信验证码超时（${Math.round(timeout / 1000)}s）`)
+    throw new Error(
+      lastTransient
+        ? `等待短信验证码超时（${Math.round(timeout / 1000)}s）；最近一次接口异常：${lastTransient}`
+        : `等待短信验证码超时（${Math.round(timeout / 1000)}s）`
+    )
   } catch (e) {
     if (!received) await cancelRental(rentalId).catch(() => undefined)
     throw e

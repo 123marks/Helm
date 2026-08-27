@@ -40,6 +40,18 @@ export const IPC = {
     generateInboxes: 'providers:generate-inboxes',
     updateInboxes: 'providers:update-inboxes'
   },
+  outlookPool: {
+    list: 'outlook-pool:list',
+    stats: 'outlook-pool:stats',
+    import: 'outlook-pool:import',
+    remove: 'outlook-pool:remove',
+    purgeDead: 'outlook-pool:purge-dead',
+    updateMeta: 'outlook-pool:update-meta',
+    test: 'outlook-pool:test',
+    keepalive: 'outlook-pool:keepalive',
+    export: 'outlook-pool:export',
+    claim: 'outlook-pool:claim'
+  },
   totp: {
     get: 'totp:get',
     preview: 'totp:preview',

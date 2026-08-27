@@ -117,6 +117,34 @@ async function fetchGraph(item: OutlookItem, inboxEmail: string): Promise<MailMe
   })
 }
 
+async function fetchImapFolder(client: ImapFlow, folder: string): Promise<MailMessage[]> {
+  const exists = await client.getMailboxLock(folder).catch(() => null)
+  if (!exists) return []
+  try {
+    const since = new Date(Date.now() - 20 * 60 * 1000)
+    const uids = await client.search({ since }, { uid: true })
+    const list = Array.isArray(uids) ? uids.slice(-20) : []
+    if (list.length === 0) return []
+    const out: MailMessage[] = []
+    for await (const msg of client.fetch(list, { envelope: true, source: true }, { uid: true })) {
+      const parsed = msg.source ? await simpleParser(msg.source) : null
+      const to = (msg.envelope?.to ?? []).map((a) => a.address || '').filter(Boolean).join(',')
+      out.push({
+        id: `${folder}:${msg.uid}`,
+        subject: parsed?.subject || msg.envelope?.subject || '',
+        from: parsed?.from?.text || msg.envelope?.from?.[0]?.address || '',
+        text: parsed?.text || '',
+        html: typeof parsed?.html === 'string' ? parsed.html : '',
+        receivedAt: (msg.envelope?.date ?? new Date()).getTime(),
+        to
+      })
+    }
+    return out
+  } finally {
+    exists.release()
+  }
+}
+
 async function fetchImapOauth(item: OutlookItem, inboxEmail: string): Promise<MailMessage[]> {
   const access = await refreshAccess(
     item,
@@ -131,32 +159,16 @@ async function fetchImapOauth(item: OutlookItem, inboxEmail: string): Promise<Ma
   })
   await client.connect()
   try {
-    const lock = await client.getMailboxLock('INBOX')
-    try {
-      const since = new Date(Date.now() - 20 * 60 * 1000)
-      const uids = await client.search({ since }, { uid: true })
-      const list = Array.isArray(uids) ? uids.slice(-20) : []
-      if (list.length === 0) return []
-      const out: MailMessage[] = []
-      for await (const msg of client.fetch(list, { envelope: true, source: true }, { uid: true })) {
-        const parsed = msg.source ? await simpleParser(msg.source) : null
-        const to = (msg.envelope?.to ?? []).map((a) => a.address || '').filter(Boolean).join(',')
-        out.push({
-          id: String(msg.uid),
-          subject: parsed?.subject || msg.envelope?.subject || '',
-          from: parsed?.from?.text || msg.envelope?.from?.[0]?.address || '',
-          text: parsed?.text || '',
-          html: typeof parsed?.html === 'string' ? parsed.html : '',
-          receivedAt: (msg.envelope?.date ?? new Date()).getTime(),
-          to
-        })
-      }
-      const needle = inboxEmail.toLowerCase()
-      if (!needle || needle === item.email.toLowerCase()) return out
-      return out.filter((m) => `${m.to} ${m.subject}`.toLowerCase().includes(needle))
-    } finally {
-      lock.release()
+    // Verification mail often lands in Junk on fresh Outlook accounts, so scan
+    // both folders (Junk names differ by locale — try the common ones).
+    const out: MailMessage[] = []
+    for (const folder of ['INBOX', 'Junk Email', 'Junk']) {
+      out.push(...(await fetchImapFolder(client, folder)))
     }
+    out.sort((a, b) => b.receivedAt - a.receivedAt)
+    const needle = inboxEmail.toLowerCase()
+    if (!needle || needle === item.email.toLowerCase()) return out
+    return out.filter((m) => `${m.to} ${m.subject}`.toLowerCase().includes(needle))
   } finally {
     await client.logout().catch(() => undefined)
   }

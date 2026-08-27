@@ -241,6 +241,38 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_quota_snapshots_ts ON quota_snapshots(ts);
       CREATE INDEX idx_quota_snapshots_account ON quota_snapshots(account_id, ts);
     `
+  },
+  {
+    version: 17,
+    // Outlook combo pool: ready-made Microsoft accounts imported as
+    // email----password----clientId----refreshToken (+ optional recovery pair).
+    // Used both as a receiving-mailbox pool and as "allocate a ready account"
+    // during registration. Secrets are encrypted; status/keepalive is tracked
+    // per row so dead tokens can be pruned.
+    sql: `
+      CREATE TABLE outlook_pool (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        password_enc TEXT,
+        client_id TEXT NOT NULL DEFAULT '',
+        refresh_token_enc TEXT,
+        recovery_email TEXT NOT NULL DEFAULT '',
+        recovery_password_enc TEXT,
+        status TEXT NOT NULL DEFAULT 'unchecked',
+        used_count INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'import',
+        tags TEXT NOT NULL DEFAULT '[]',
+        notes TEXT NOT NULL DEFAULT '',
+        account_id TEXT,
+        last_used_at INTEGER,
+        last_check_at INTEGER,
+        last_result TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX idx_outlook_pool_email ON outlook_pool(email);
+      CREATE INDEX idx_outlook_pool_status ON outlook_pool(status);
+    `
   }
 ]
 

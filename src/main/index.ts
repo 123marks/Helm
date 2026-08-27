@@ -9,6 +9,7 @@ import { logger } from './services/logger'
 import { registerIpc } from './ipc'
 import { initUpdater, scheduleStartupCheck } from './services/updater'
 import { startQuotaAutoRefresh } from './services/quotaAuto'
+import { startOutlookKeepalive } from './services/outlookPool'
 import { migrateLegacyUserData } from './services/dataMigration'
 import { repairProfileDirs } from './db/repositories/accounts'
 
@@ -253,6 +254,7 @@ async function bootstrap(): Promise<void> {
   createWindow()
   scheduleStartupCheck()
   startQuotaAutoRefresh()
+  startOutlookKeepalive()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

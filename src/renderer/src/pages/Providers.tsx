@@ -14,6 +14,7 @@ import { useAppStore } from '@renderer/store/app'
 import { ProviderConfigDialog } from '@renderer/components/ProviderConfigDialog'
 import { SmsRentalsPanel } from '@renderer/components/SmsRentalsPanel'
 import { InboxHistoryPanel } from '@renderer/components/InboxHistoryPanel'
+import { OutlookPoolPanel } from '@renderer/components/OutlookPoolPanel'
 import { MailPeekDialog } from '@renderer/components/MailPeekDialog'
 import { Card, CardContent } from '@renderer/components/ui/card'
 import { EmptyState } from '@renderer/components/ui/empty-state'
@@ -249,6 +250,7 @@ export default function Providers(): React.JSX.Element {
         </CardContent>
       </Card>
 
+      {tab === 'mailbox' && <OutlookPoolPanel />}
       {tab === 'mailbox' && (
         <InboxHistoryPanel
           refreshToken={inboxTick}

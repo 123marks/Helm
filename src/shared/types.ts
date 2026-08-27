@@ -130,6 +130,50 @@ export interface AccountQuota {
   fetchedAt: number
 }
 
+export type OutlookPoolStatus = 'unchecked' | 'active' | 'dead' | 'cooldown' | 'in_use'
+
+/** A ready-made Outlook account in the pool (secrets never leave the main process). */
+export interface OutlookPoolItem {
+  id: string
+  email: string
+  clientId: string
+  recoveryEmail: string
+  status: OutlookPoolStatus
+  usedCount: number
+  source: string
+  tags: string[]
+  notes: string
+  accountId: string
+  hasPassword: boolean
+  hasRefreshToken: boolean
+  hasRecoveryPassword: boolean
+  lastUsedAt: number | null
+  lastCheckAt: number | null
+  lastResult: string
+  createdAt: number
+}
+
+export interface OutlookPoolStats {
+  total: number
+  active: number
+  dead: number
+  unchecked: number
+  cooldown: number
+  inUse: number
+}
+
+export interface OutlookImportResult {
+  imported: number
+  skipped: number
+  errors: string[]
+}
+
+export interface OutlookKeepaliveResult {
+  checked: number
+  alive: number
+  dead: number
+}
+
 export interface QuotaHistoryPoint {
   ts: number
   /** Mean usage across every account sampled in this bucket, 0–100. */
@@ -403,6 +447,8 @@ export interface AppSettings {
   showQuotaHints: boolean
   /** 后台轮询所有账号额度的间隔，单位分钟；0 表示关闭。 */
   quotaAutoRefreshMinutes: number
+  /** 后台刷新 Outlook 池令牌的间隔，单位小时；0 表示关闭。 */
+  outlookKeepaliveHours: number
   slowMo: number
   skipUpdateVersion: string
 }
@@ -471,6 +517,19 @@ export interface Api {
     removeInboxes(ids: string[]): Promise<void>
     generateInboxes(count: number): Promise<GeneratedInbox[]>
     updateInboxes(ids: string[], patch: { notes?: string; tags?: string[] }): Promise<void>
+  }
+  outlookPool: {
+    list(): Promise<OutlookPoolItem[]>
+    stats(): Promise<OutlookPoolStats>
+    import(text: string): Promise<OutlookImportResult>
+    remove(ids: string[]): Promise<{ removed: number }>
+    purgeDead(): Promise<{ removed: number }>
+    updateMeta(ids: string[], patch: { tags?: string[]; notes?: string }): Promise<void>
+    test(id: string): Promise<{ ok: boolean; message: string }>
+    keepalive(limit?: number): Promise<OutlookKeepaliveResult>
+    export(ids: string[] | undefined, sixSegment: boolean): Promise<string>
+    /** Materialize N ready accounts from the pool into the Microsoft account library. */
+    claim(count: number): Promise<{ created: number; emails: string[] }>
   }
   totp: {
     get(id: string): Promise<TotpResult | null>

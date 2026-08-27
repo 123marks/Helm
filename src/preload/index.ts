@@ -44,6 +44,18 @@ const api: Api = {
     generateInboxes: (count) => ipcRenderer.invoke(IPC.providers.generateInboxes, count),
     updateInboxes: (ids, patch) => ipcRenderer.invoke(IPC.providers.updateInboxes, ids, patch)
   },
+  outlookPool: {
+    list: () => ipcRenderer.invoke(IPC.outlookPool.list),
+    stats: () => ipcRenderer.invoke(IPC.outlookPool.stats),
+    import: (text) => ipcRenderer.invoke(IPC.outlookPool.import, text),
+    remove: (ids) => ipcRenderer.invoke(IPC.outlookPool.remove, ids),
+    purgeDead: () => ipcRenderer.invoke(IPC.outlookPool.purgeDead),
+    updateMeta: (ids, patch) => ipcRenderer.invoke(IPC.outlookPool.updateMeta, ids, patch),
+    test: (id) => ipcRenderer.invoke(IPC.outlookPool.test, id),
+    keepalive: (limit) => ipcRenderer.invoke(IPC.outlookPool.keepalive, limit),
+    export: (ids, sixSegment) => ipcRenderer.invoke(IPC.outlookPool.export, ids, sixSegment),
+    claim: (count) => ipcRenderer.invoke(IPC.outlookPool.claim, count)
+  },
   totp: {
     get: (id) => ipcRenderer.invoke(IPC.totp.get, id),
     preview: (secret) => ipcRenderer.invoke(IPC.totp.preview, secret),
