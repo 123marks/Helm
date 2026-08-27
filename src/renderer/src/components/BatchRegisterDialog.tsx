@@ -60,7 +60,8 @@ export function BatchRegisterDialog({
   const [oauthPlatforms, setOauthPlatforms] = useState<Platform[]>([])
   const [platform, setPlatform] = useState<Platform | ''>('')
   const [count, setCount] = useState(1)
-  const [mailSource, setMailSource] = useState<'generate' | 'inboxes' | 'accounts'>('accounts')
+  const [mailSource, setMailSource] = useState<'generate' | 'inboxes' | 'accounts' | 'pool'>('accounts')
+  const [poolAvailable, setPoolAvailable] = useState<number | null>(null)
   const [inboxes, setInboxes] = useState<GeneratedInbox[]>([])
   const [inboxIds, setInboxIds] = useState<string[]>([])
   const [mailboxAccountIds, setMailboxAccountIds] = useState<string[]>([])
@@ -99,6 +100,7 @@ export function BatchRegisterDialog({
     })
     void api.providers.list('mailbox').then((list) => setMailboxReady(list.some((p) => p.enabled)))
     void api.providers.listInboxes().then(setInboxes)
+    void api.outlookPool.stats().then((s) => setPoolAvailable(s.active + s.unchecked)).catch(() => setPoolAvailable(null))
   }, [open, mode, prefillInboxIds])
 
   const toggleId = (id: string, list: string[], set: (v: string[]) => void): void => {
@@ -116,7 +118,8 @@ export function BatchRegisterDialog({
         platform,
         count: mailSource === 'generate' ? count : undefined,
         inboxIds: mailSource === 'inboxes' ? inboxIds : undefined,
-        mailboxAccountIds: mailSource === 'accounts' ? mailboxAccountIds : undefined
+        mailboxAccountIds: mailSource === 'accounts' ? mailboxAccountIds : undefined,
+        outlookPoolCount: mailSource === 'pool' ? count : undefined
       })
       if (next.length === 0) {
         toast.error('没有可预览的邮箱')
@@ -182,9 +185,11 @@ export function BatchRegisterDialog({
   const emailReady =
     mailSource === 'generate'
       ? mailboxReady !== false
-      : mailSource === 'inboxes'
-        ? inboxIds.length > 0
-        : mailboxAccountIds.length > 0
+      : mailSource === 'pool'
+        ? (poolAvailable ?? 0) > 0
+        : mailSource === 'inboxes'
+          ? inboxIds.length > 0
+          : mailboxAccountIds.length > 0
 
   const confirmIssues = platform
     ? drafts.flatMap((d, i) => draftIssues(platform, d).map((msg) => `#${i + 1} ${msg}`))
@@ -285,6 +290,9 @@ export function BatchRegisterDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="accounts">账号库真实邮箱（推荐）</SelectItem>
+                      <SelectItem value="pool">
+                        Outlook 池现成号{poolAvailable != null ? `（可用 ${poolAvailable}）` : ''}
+                      </SelectItem>
                       <SelectItem value="inboxes">已生成的临时邮箱</SelectItem>
                       <SelectItem value="generate">再生成一批临时邮箱</SelectItem>
                     </SelectContent>
@@ -306,9 +314,9 @@ export function BatchRegisterDialog({
               )}
             </div>
 
-            {mode === 'email' && mailSource === 'generate' && (
+            {mode === 'email' && (mailSource === 'generate' || mailSource === 'pool') && (
               <div className="space-y-1.5">
-                <Label>生成数量</Label>
+                <Label>{mailSource === 'pool' ? '从池取号数量' : '生成数量'}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -316,6 +324,11 @@ export function BatchRegisterDialog({
                   value={count}
                   onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
                 />
+                {mailSource === 'pool' && (
+                  <p className="text-xs text-muted-foreground">
+                    每个号从 Outlook 池取一个现成微软邮箱来收码；注册成功后该平台账号入库，邮箱标记为已用。
+                  </p>
+                )}
               </div>
             )}
 

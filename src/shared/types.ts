@@ -670,6 +670,8 @@ export interface RegisterPrepareInput {
   count?: number
   inboxIds?: string[]
   mailboxAccountIds?: string[]
+  /** Allocate this many ready Outlook accounts from the pool as receiving mailboxes. */
+  outlookPoolCount?: number
 }
 
 export type UpdateStatus =

@@ -16,8 +16,10 @@ import { createAccount, getAccount, getAccountForAutomation } from '../db/reposi
 import {
   getGeneratedInbox,
   linkInboxById,
+  recordGeneratedInbox,
   revealInboxToken
 } from '../db/repositories/inboxes'
+import { allocateOutlookAccount } from '../services/outlookPool'
 import { genPassword } from './flows/util'
 import { logger } from '../services/logger'
 
@@ -61,6 +63,32 @@ export async function prepareRegistrations(input: RegisterPrepareInput): Promise
       const row = getGeneratedInbox(id)
       if (!row) throw new Error(`邮箱记录不存在：${id.slice(0, 8)}`)
       drafts.push(draftFromInbox(platform, row.id, row.email, row.driver))
+    }
+    return drafts
+  }
+
+  if (input.outlookPoolCount && input.outlookPoolCount > 0) {
+    const n = Math.max(1, Math.min(50, Math.floor(input.outlookPoolCount)))
+    for (let i = 0; i < n; i++) {
+      const item = allocateOutlookAccount()
+      if (!item) {
+        if (drafts.length === 0) throw new Error('Outlook 池里没有可用的有效号，请先导入或保活')
+        break
+      }
+      // Record the allocated account as an outlook_graph inbox so the rest of
+      // the pipeline (resolveMailbox → read code) works with no special-casing.
+      const rec = recordGeneratedInbox({
+        driver: 'outlook_graph',
+        email: item.email,
+        token: JSON.stringify({
+          email: item.email,
+          password: item.password,
+          clientId: item.clientId,
+          refreshToken: item.refreshToken
+        }),
+        source: 'register'
+      })
+      drafts.push(draftFromInbox(platform, rec.id, item.email, 'outlook_graph'))
     }
     return drafts
   }
