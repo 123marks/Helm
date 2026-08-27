@@ -26,6 +26,7 @@ import { listTasks, deleteTask, deleteFinishedTasks } from '../db/repositories/t
 import { getAccount, touchLastUsed } from '../db/repositories/accounts'
 import { quotaHistory } from '../db/repositories/quotaHistory'
 import { refreshAccountQuota, refreshAccountQuotas } from '../services/quota'
+import { revalidateAccounts } from '../services/revalidate'
 import { captureSessionFromProfile } from '../services/sessionSync'
 import { applyAccountLocal } from '../services/localApply'
 import { syncLocalLogins } from '../services/localSession'
@@ -146,6 +147,19 @@ export function registerAutomationIpc(): void {
     })
   )
   ipcMain.handle(IPC.automation.quotaHistory, (_e, days: number) => quotaHistory(days))
+  ipcMain.handle(IPC.automation.revalidate, (e, accountIds: string[]) =>
+    revalidateAccounts(accountIds, {
+      onProgress: ({ account, done, total }) =>
+        e.sender.send(IPC.automation.quotaUpdated, {
+          accountId: account.id,
+          reason: 'revalidate',
+          phase: 'done',
+          account,
+          done,
+          total
+        } satisfies QuotaSyncEvent)
+    })
+  )
   ipcMain.handle(IPC.automation.captureSession, async (_e, accountId: string) => {
     requireUnlocked()
     const acc = getAccount(accountId)

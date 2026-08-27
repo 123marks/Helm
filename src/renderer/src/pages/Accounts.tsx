@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Rocket,
   Search,
+  ShieldCheck,
   Star,
   Trash,
   Trash2,
@@ -339,6 +340,30 @@ export default function Accounts(): React.JSX.Element {
     }
   }
 
+  const revalidateBatch = async (ids: string[]): Promise<void> => {
+    const unique = [...new Set(ids)]
+    if (unique.length === 0) {
+      toast.error('所选账号里没有可验活的订阅号')
+      return
+    }
+    if (quotaBusy) {
+      toast.error('额度/验活任务正在进行')
+      return
+    }
+    setQuotaBusy(true)
+    toast.loading(`验活重登：0 / ${unique.length}`, { id: 'revalidate' })
+    try {
+      const r = await api.automation.revalidate(unique)
+      toast.success(`验活完成：有效 ${r.alive}，失效 ${r.dead}${r.skipped ? `，跳过停用 ${r.skipped}` : ''}`, {
+        id: 'revalidate'
+      })
+    } catch (e) {
+      toast.error((e as Error).message, { id: 'revalidate' })
+    } finally {
+      setQuotaBusy(false)
+    }
+  }
+
   useEffect(() => {
     return api.automation.onQuotaUpdated((e) => {
       if (e.account) replace(e.account)
@@ -350,6 +375,9 @@ export default function Accounts(): React.JSX.Element {
       })
       if (e.reason === 'batch' && e.phase === 'done') {
         toast.loading(`额度查询 ${e.done} / ${e.total}`, { id: 'quota-batch' })
+      }
+      if (e.reason === 'revalidate' && e.phase === 'done') {
+        toast.loading(`验活重登 ${e.done} / ${e.total}`, { id: 'revalidate' })
       }
     })
   }, [replace])
@@ -788,6 +816,17 @@ export default function Accounts(): React.JSX.Element {
             }
           >
             <RefreshCw className={`h-4 w-4 ${quotaBusy ? 'animate-spin' : ''}`} /> 刷新额度
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={quotaBusy}
+            title="重新验证登录态：能刷新令牌的会顺带重登，失效的标为异常"
+            onClick={() =>
+              void revalidateBatch(selectedAccounts.filter((a) => hasQuota(a.platform)).map((a) => a.id))
+            }
+          >
+            <ShieldCheck className={`h-4 w-4 ${quotaBusy ? 'animate-spin' : ''}`} /> 验活重登
           </Button>
           <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
             <Layers className="h-4 w-4" /> 批量编辑

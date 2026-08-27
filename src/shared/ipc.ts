@@ -78,6 +78,7 @@ export const IPC = {
     refreshQuota: 'automation:refresh-quota',
     refreshQuotas: 'automation:refresh-quotas',
     quotaHistory: 'automation:quota-history',
+    revalidate: 'automation:revalidate',
     captureSession: 'automation:capture-session',
     applyLocal: 'automation:apply-local',
     syncLocal: 'automation:sync-local',

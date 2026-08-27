@@ -196,7 +196,7 @@ export interface QuotaHistorySeries {
  */
 export interface QuotaSyncEvent {
   accountId: string
-  reason: 'batch' | 'auto' | 'sweep'
+  reason: 'batch' | 'auto' | 'sweep' | 'revalidate'
   phase: 'start' | 'done' | 'error'
   account?: Account
   message?: string
@@ -569,6 +569,9 @@ export interface Api {
     refreshQuotas(accountIds: string[]): Promise<Account[]>
     /** Averaged usage over the last `days`, for the cockpit trend chart. */
     quotaHistory(days: number): Promise<QuotaHistorySeries>
+    /** Re-check token/session liveness and flip status; re-mints tokens where possible. */
+    revalidate(accountIds: string[]): Promise<{ checked: number; alive: number; dead: number; skipped: number }>
+
     captureSession(accountId: string): Promise<Account>
     /** Write this account into the local IDE / CLI login (Cursor state.vscdb, Codex auth.json, …). */
     applyLocal(accountId: string): Promise<LocalApplyResult>

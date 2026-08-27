@@ -84,6 +84,7 @@ const api: Api = {
     refreshQuota: (accountId) => ipcRenderer.invoke(IPC.automation.refreshQuota, accountId),
     refreshQuotas: (accountIds) => ipcRenderer.invoke(IPC.automation.refreshQuotas, accountIds),
     quotaHistory: (days) => ipcRenderer.invoke(IPC.automation.quotaHistory, days),
+    revalidate: (accountIds) => ipcRenderer.invoke(IPC.automation.revalidate, accountIds),
     captureSession: (accountId) => ipcRenderer.invoke(IPC.automation.captureSession, accountId),
     applyLocal: (accountId) => ipcRenderer.invoke(IPC.automation.applyLocal, accountId),
     syncLocal: () => ipcRenderer.invoke(IPC.automation.syncLocal),
