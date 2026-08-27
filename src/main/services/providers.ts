@@ -231,6 +231,42 @@ async function testCaptcha(p: ProviderSetting): Promise<ProviderTestResult> {
     if (!data.errorId) return { ok: true, message: `YesCaptcha 余额：${data.balance}` }
     return { ok: false, message: `YesCaptcha 校验失败：${data.errorDescription ?? '未知错误'}` }
   }
+  if (p.driver === 'captcha_run') {
+    const base = String(p.config.apiBase || 'https://apicn.captcha.run').replace(/\/+$/, '')
+    const res = await fetch(`${base}/v2/users/self/wallet`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(20000)
+    })
+    if (!res.ok) return { ok: false, message: `captcha.run 校验失败：HTTP ${res.status}` }
+    const data = (await res.json().catch(() => ({}))) as {
+      balance?: number
+      wallet?: { balance?: number }
+    }
+    const bal = data.balance ?? data.wallet?.balance
+    if (bal == null) return { ok: false, message: 'captcha.run 返回无余额字段，请核对 API 地址 / Key' }
+    return { ok: true, message: `captcha.run 余额：${bal}` }
+  }
+  if (p.driver === 'ezcaptcha') {
+    const base = String(p.config.apiBase || 'https://api.ez-captcha.com').replace(/\/+$/, '')
+    const res = await fetch(`${base}/getBalance`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientKey: apiKey })
+    })
+    const data = (await res.json()) as { errorId?: number; balance?: number; errorDescription?: string }
+    if (!data.errorId) return { ok: true, message: `EzCaptcha 余额：${data.balance}` }
+    return { ok: false, message: `EzCaptcha 校验失败：${data.errorDescription ?? '未知错误'}` }
+  }
+  if (p.driver === 'capsolver') {
+    const res = await fetch('https://api.capsolver.com/getBalance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientKey: apiKey })
+    })
+    const data = (await res.json()) as { errorId?: number; balance?: number; errorDescription?: string }
+    if (!data.errorId) return { ok: true, message: `CapSolver 余额：$${data.balance}` }
+    return { ok: false, message: `CapSolver 校验失败：${data.errorDescription ?? '未知错误'}` }
+  }
   return { ok: false, message: '该打码驱动暂不支持一键测试' }
 }
 

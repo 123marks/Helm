@@ -311,6 +311,44 @@ export const PROVIDER_DRIVERS: ProviderDriver[] = [
   },
   {
     type: 'captcha',
+    driver: 'captcha_run',
+    label: 'captcha.run（PerimeterX）',
+    description:
+      '纯协议 PerimeterX 打码（PxCaptcha2）。Outlook 协议注册专用，需配合住宅代理；「测试」查钱包余额。',
+    testable: true,
+    fields: [
+      { key: 'apiKey', label: 'API Key（Bearer）', type: 'password', required: true, secret: true },
+      {
+        key: 'apiBase',
+        label: 'API 地址',
+        type: 'text',
+        defaultValue: 'https://apicn.captcha.run',
+        placeholder: 'https://apicn.captcha.run',
+        help: '国内 apicn.captcha.run；海外可用 https://api.captcha.run。'
+      }
+    ]
+  },
+  {
+    type: 'captcha',
+    driver: 'ezcaptcha',
+    label: 'EzCaptcha（PerimeterX 备选）',
+    description: 'PerimeterX / PxInvisible 打码，作为 captcha.run 的兜底。',
+    testable: true,
+    fields: [
+      { key: 'apiKey', label: 'API Key', type: 'password', required: true, secret: true },
+      { key: 'apiBase', label: 'API 地址', type: 'text', defaultValue: 'https://api.ez-captcha.com' }
+    ]
+  },
+  {
+    type: 'captcha',
+    driver: 'capsolver',
+    label: 'CapSolver（PerimeterX / 文本 OCR 备选）',
+    description: 'AntiPerimeterX 与文本图形验证码 OCR，作为兜底。',
+    testable: true,
+    fields: [{ key: 'apiKey', label: 'API Key', type: 'password', required: true, secret: true }]
+  },
+  {
+    type: 'captcha',
     driver: 'manual',
     label: '手动打码',
     description: '弹出浏览器让你手动完成验证，无需 API Key。',
