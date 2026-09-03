@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- **修复 Cursor 额度 401**：`usage-summary` 依赖的 WorkOS Cookie 里是短效 access JWT，过期即 401。现在按官方流程先用 refresh token 走 `api2.cursor.sh/oauth/token` 续期、用新 token 重建 `WorkosCursorSessionToken` Cookie（并带对齐的桌面 UA）再查额度；套餐档位改用 `full_stripe_profile` / `stripe_profile`（Bearer）读取。无 refresh token 的账号会给出明确「需重新官方授权」提示，而不是空白 401。（参考 chotgpt/cursor-usage-viewer）
+- **新增 Cursor「Grok Bot」额度**：对接 `GetSandUsageStatus`（Bearer + Connect-Protocol-Version），在卡片上新增 Grok Bot 周期用量条（含套餐名与重置时间）。
+- 续期拿到的新 access / refresh token 会写回账号，后续刷新与本地应用都用最新令牌。
+
 ## 0.4.0
 
 - **新增 Outlook 邮箱池**：导入现成微软号 combo（`email----password----clientId----refreshToken`，可选 + 恢复邮箱两段，兼容四段/六段），在「服务中心 · 邮箱」里统一管理——状态/用量统计、批量保活（刷新 refresh_token，`invalid_grant` 自动标死号）、导出四段/六段、一键「取号建账」直接把现成号建进微软账号库（秒级、无浏览器、无需打码）

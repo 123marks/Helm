@@ -2,7 +2,7 @@ import type { Account, AccountQuota, PlanKind, Platform, QuotaMeter } from '@sha
 import { inferPlanKind, meterWorthShowing, planDisplayName, planKindOf } from '@shared/membership'
 import { hasQuota } from '@shared/platformFlags'
 import { looksLikeEmail, scanEmail } from '@shared/identity'
-import { normalizeCursorSession } from '@shared/tokenImport'
+import { jwtPayload, normalizeCursorSession } from '@shared/tokenImport'
 import { isProfileBusy, readProfileCookies } from '../automation/browser'
 import { getAccount, revealSecrets, updateAccount } from '../db/repositories/accounts'
 import { applySessionToProfile, captureSessionFromProfile } from './sessionSync'
@@ -236,28 +236,169 @@ async function readCookiesSafe(profileDir: string): Promise<Cookie[]> {
   }
 }
 
-async function fetchCursor(cookies: Cookie[], sessionToken: string): Promise<AccountQuota> {
-  const cur =
-    normalizeCursorSession(sessionToken) ||
-    normalizeCursorSession(
-      cookies.find((c) => c.name === 'WorkosCursorSessionToken')?.value || ''
-    )
-  if (!cur) throw new Error('未登录 Cursor。请粘贴 WorkosCursorSessionToken / JWT，或点「官方授权」登录后再刷新')
+// Cursor's first-party endpoints (verified against chotgpt/cursor-usage-viewer,
+// which mirrors Cursor's own dashboard calls).
+const CURSOR_OAUTH = 'https://api2.cursor.sh/oauth/token'
+const CURSOR_CLIENT_ID = 'KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB'
+const CURSOR_USAGE = 'https://cursor.com/api/usage-summary'
+const CURSOR_FULL_PROFILE = 'https://api2.cursor.sh/auth/full_stripe_profile'
+const CURSOR_PROFILE = 'https://api2.cursor.sh/auth/stripe_profile'
+const CURSOR_SAND_USAGE = 'https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus'
+// usage-summary is validated against this desktop UA; a generic one gets 401'd.
+const CURSOR_USAGE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 
-  const header = {
-    cookie: `WorkosCursorSessionToken=${cur.headerValue}`,
-    origin: 'https://cursor.com',
-    referer: 'https://cursor.com/dashboard?tab=usage'
+function cursorJwtExp(jwt: string): number | null {
+  const p = jwtPayload(jwt)
+  const exp = p ? Number(p.exp) : NaN
+  return Number.isFinite(exp) ? exp : null
+}
+
+/** True when the access JWT is unparsable or expires within 5 minutes. */
+function cursorTokenStale(access: string): boolean {
+  const exp = cursorJwtExp(access)
+  if (exp == null) return true
+  return exp <= Math.floor(Date.now() / 1000) + 300
+}
+
+/** `WorkosCursorSessionToken=user_xxx::<jwt>` — the exact cookie Cursor expects. */
+function cursorCookie(access: string): string | null {
+  const sub = String(jwtPayload(access)?.sub || '')
+  const user = sub.includes('|') ? sub.split('|').pop() || sub : sub
+  if (!/^user_[A-Za-z0-9_-]+$/.test(user)) return null
+  return `WorkosCursorSessionToken=${user}%3A%3A${access}`
+}
+
+async function cursorRefreshAccess(refresh: string): Promise<{ access: string; refresh: string }> {
+  const res = await fetch(CURSOR_OAUTH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ grant_type: 'refresh_token', client_id: CURSOR_CLIENT_ID, refresh_token: refresh }),
+    signal: AbortSignal.timeout(20000)
+  })
+  const data = asRec(await res.json().catch(() => ({})))
+  if (data.shouldLogout === true) throw new Error('Cursor 会话已注销，请重新官方授权登录')
+  const access = String(data.access_token || data.accessToken || '')
+  if (!access) throw new Error(`Cursor 令牌续期失败（HTTP ${res.status}）`)
+  return { access, refresh: String(data.refresh_token || data.refreshToken || refresh) }
+}
+
+/** individualMembershipType wins unless the account is Enterprise. */
+function cursorProfilePlan(profile: Record<string, unknown>): string {
+  const membership = String(profile.membershipType || '').trim()
+  const individual = String(profile.individualMembershipType || '').trim()
+  if (individual && individual.toLowerCase() !== 'free' && membership.toLowerCase() !== 'enterprise') {
+    return individual
+  }
+  return membership || individual
+}
+
+async function fetchCursorProfile(access: string): Promise<Record<string, unknown> | null> {
+  for (const url of [CURSOR_FULL_PROFILE, CURSOR_PROFILE]) {
+    try {
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${access}`, accept: 'application/json' },
+        signal: AbortSignal.timeout(15000)
+      })
+      if (res.status === 401 || res.status === 403) continue
+      if (!res.ok) continue
+      const v = await res.json().catch(() => null)
+      if (v && typeof v === 'object') return v as Record<string, unknown>
+    } catch {
+      /* try next */
+    }
+  }
+  return null
+}
+
+/** Cursor's Grok Bot (internally "Sand") weekly usage — a separate fifth meter. */
+async function fetchCursorSand(access: string): Promise<QuotaMeter | null> {
+  try {
+    const res = await fetch(CURSOR_SAND_USAGE, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${access}`,
+        'content-type': 'application/json',
+        accept: 'application/json',
+        'connect-protocol-version': '1'
+      },
+      body: '{}',
+      signal: AbortSignal.timeout(15000)
+    })
+    if (!res.ok) return null
+    const v = asRec(await res.json().catch(() => ({})))
+    const pct = num(v.usagePercent)
+    const hasLimit = v.hasNonZeroIncludedLimit === true || v.hasAvailableUsage === true
+    if (pct == null && !hasLimit) return null
+    const label = String(v.grokPlanLabel || 'Grok Bot')
+    const resetAt = v.nextResetTimestampUtc ? Date.parse(String(v.nextResetTimestampUtc)) : null
+    return meter('sand', label, pct, 100, '%', Number.isFinite(resetAt) ? resetAt : null, {
+      hint: 'Cursor Grok Bot 周期用量（Sand）'
+    })
+  } catch {
+    return null
+  }
+}
+
+async function fetchCursor(accountId: string, cookies: Cookie[]): Promise<AccountQuota> {
+  const acc = getAccount(accountId)
+  if (!acc) throw new Error('账号不存在')
+  const secrets = revealSecrets(accountId)
+  const cf = acc.customFields
+
+  // Access JWT: prefer the stored access token, else the JWT inside the session cookie.
+  const cookieVal =
+    cf.sessionToken || cookies.find((c) => c.name === 'WorkosCursorSessionToken')?.value || ''
+  const norm = normalizeCursorSession(cf.accessToken || '') || normalizeCursorSession(cookieVal)
+  let access = (cf.accessToken || '').startsWith('eyJ') ? cf.accessToken : norm?.jwt || ''
+  // Refresh token is distinct from the cookie; ignore a `userId::jwt` masquerading as one.
+  let refresh = secrets.refreshToken || cf.refreshToken || ''
+  if (!refresh || refresh === access || refresh.includes('::')) refresh = ''
+
+  // The access JWT is short-lived; refresh it before it 401s the usage call.
+  if ((!access || cursorTokenStale(access)) && refresh) {
+    try {
+      const next = await cursorRefreshAccess(refresh)
+      access = next.access
+      const patch: Record<string, string> = { ...cf, accessToken: next.access }
+      updateAccount(accountId, {
+        customFields: patch,
+        ...(next.refresh !== refresh ? { refreshToken: next.refresh } : {})
+      })
+    } catch (e) {
+      if (!access) throw e
+      /* keep trying the old access token */
+    }
+  }
+  if (!access) {
+    throw new Error('未登录 Cursor。请粘贴 WorkosCursorSessionToken / JWT，或点「官方授权」登录后再刷新')
   }
 
-  const summary = asRec(await requestJson('https://cursor.com/api/usage-summary', header))
-  let rawPlan = String(summary.membershipType || '')
-  let email = scanEmail(summary)
-  if (!rawPlan || !email) {
-    const stripe = asRec(await requestJson('https://cursor.com/api/auth/stripe', header).catch(() => ({})))
-    rawPlan = rawPlan || String(stripe.membershipType || stripe.subscriptionStatus || '')
-    email = email || scanEmail(stripe)
+  const cookie = cursorCookie(access)
+  if (!cookie) throw new Error('Cursor 会话令牌无法解析出用户 ID，请重新官方授权登录')
+
+  let summary: Record<string, unknown>
+  try {
+    const res = await fetch(CURSOR_USAGE, {
+      headers: { accept: 'application/json', cookie, 'user-agent': CURSOR_USAGE_UA },
+      signal: AbortSignal.timeout(20000)
+    })
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        refresh
+          ? 'Cursor 拒绝了会话（HTTP 401）。请重新官方授权登录以更新令牌'
+          : 'Cursor 会话已过期（HTTP 401）。该账号没有可续期的 refresh token，请重新官方授权登录'
+      )
+    }
+    if (!res.ok) throw new Error(`Cursor 额度接口 HTTP ${res.status}`)
+    summary = asRec(await res.json())
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw new Error('Cursor 额度接口请求超时')
+    throw e
   }
+
+  const profile = await fetchCursorProfile(access)
+  let rawPlan = String(summary.membershipType || (profile ? cursorProfilePlan(profile) : ''))
+  let email = scanEmail(summary) || (profile ? scanEmail(profile) : '')
   const individual = asRec(summary.individualUsage)
   const planPool = asRec(individual.plan)
   const onDemand = asRec(individual.onDemand || individual.ondemand)
@@ -323,6 +464,10 @@ async function fetchCursor(cookies: Cookie[], sessionToken: string): Promise<Acc
       })
     )
   }
+
+  // Grok Bot (Sand) is an independent, optional fifth meter — never let it break core usage.
+  const sand = await fetchCursorSand(access)
+  if (sand) meters.push(sand)
 
   return ok({
     plan,
@@ -911,7 +1056,7 @@ async function fetchQuotaFor(accountId: string): Promise<AccountQuota> {
     }
   }
   if (!cookies.length && !session) cookies = await readCookiesSafe(latest.profileDir)
-  if (latest.platform === 'cursor') return fetchCursor(cookies, session)
+  if (latest.platform === 'cursor') return fetchCursor(accountId, cookies)
   if (latest.platform === 'openai') return fetchOpenAI(cookies, session)
   if (latest.platform === 'anthropic') {
     return fetchAnthropic(cookies, session, latest.customFields.lastActiveOrg || '')
