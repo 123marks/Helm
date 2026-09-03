@@ -212,6 +212,8 @@ export interface OfficialOAuthStart {
   expiresIn: number
   intervalSeconds: number
   needsCallback: boolean
+  /** The local callback server is listening, so the system browser can auto-complete. */
+  serverBound?: boolean
 }
 
 /** A previous password (masked preview + timestamp); plaintext fetched on demand. */

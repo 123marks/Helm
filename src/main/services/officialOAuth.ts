@@ -19,6 +19,7 @@ type Session = {
   state?: string
   redirectUri?: string
   server?: Server
+  serverBound?: boolean
   captureWindow?: BrowserWindow
   result?: AccountInput
   error?: string
@@ -216,7 +217,16 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
           ? '本机 1455 端口被系统保留（Hyper-V / WSL / Docker 常见）。请点「在浏览器中打开」完成授权，再把地址栏 http://localhost:1455/auth/callback?code=… 整段粘到下方「手动输入回调地址」。'
           : `本机回调服务启动失败（${msg}）。请在浏览器完成授权后，把回调地址粘到下方。`
     }
-    return { loginId, platform, authUrl, expiresIn: 300, intervalSeconds: 1, needsCallback: true }
+    session.serverBound = !session.error
+    return {
+      loginId,
+      platform,
+      authUrl,
+      expiresIn: 300,
+      intervalSeconds: 1,
+      needsCallback: true,
+      serverBound: session.serverBound
+    }
   }
 
   if (platform === 'kiro') {
@@ -255,13 +265,15 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
         writeHtml(res, 400, page(false, (e as Error).message))
       }
     })
+    session.serverBound = true
     return {
       loginId,
       platform,
       authUrl: session.authUrl,
       expiresIn: 600,
       intervalSeconds: 1,
-      needsCallback: true
+      needsCallback: true,
+      serverBound: true
     }
   }
 
@@ -303,7 +315,16 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
         writeHtml(res, 400, page(false, (e as Error).message))
       }
     })
-    return { loginId, platform, authUrl: session.authUrl, expiresIn: 600, intervalSeconds: 1, needsCallback: true }
+    session.serverBound = true
+    return {
+      loginId,
+      platform,
+      authUrl: session.authUrl,
+      expiresIn: 600,
+      intervalSeconds: 1,
+      needsCallback: true,
+      serverBound: true
+    }
   }
 
   if (platform === 'antigravity') {
@@ -352,7 +373,16 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
       state
     })
     session.authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${q.toString()}`
-    return { loginId, platform, authUrl: session.authUrl, expiresIn: 600, intervalSeconds: 1, needsCallback: true }
+    session.serverBound = !session.error
+    return {
+      loginId,
+      platform,
+      authUrl: session.authUrl,
+      expiresIn: 600,
+      intervalSeconds: 1,
+      needsCallback: true,
+      serverBound: session.serverBound
+    }
   }
 
   throw new Error(`${platform} 没有公开 OAuth。请用 Token / JSON 粘贴`)
@@ -367,7 +397,8 @@ export function officialOAuthSnapshot(loginId: string): OfficialOAuthStart {
     authUrl: s.authUrl,
     expiresIn: Math.max(0, Math.round((s.expiresAt - Date.now()) / 1000)),
     intervalSeconds: s.intervalSeconds,
-    needsCallback: s.needsCallback
+    needsCallback: s.needsCallback,
+    serverBound: s.serverBound
   }
 }
 
@@ -459,7 +490,11 @@ export async function openAndCaptureOAuth(loginId: string): Promise<AccountInput
       }
     })
     win.webContents.setUserAgent(CAPTURE_UA)
-    win.loadURL(session.authUrl).catch((e: Error) => done(() => reject(e)))
+    // loadURL rejects on the very first 302 (OpenAI redirects the authorize URL
+    // straight to its login page) and on any later redirect/abort — that's
+    // normal, NOT a failure. Ignore it; capture is driven by the navigation
+    // listeners, and closing the window is what counts as cancel.
+    win.loadURL(session.authUrl).catch(() => undefined)
   })
 }
 

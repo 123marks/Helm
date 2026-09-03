@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "productName": "Helm",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Helm —— AI 订阅账号的驾驶舱：多平台账号安全管理、额度监控与浏览器自动化（Electron + React + TypeScript + Playwright）",
   "author": "Helm Contributors",
   "license": "MIT",

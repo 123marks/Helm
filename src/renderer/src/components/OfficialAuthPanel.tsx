@@ -54,22 +54,22 @@ function PkceAuthPanel({
           return
         }
         setSession(started)
-        if (started.needsCallback) {
-          // Callback platforms (OpenAI / Kiro / Windsurf / Antigravity): we
-          // capture the redirect inside an in-app window, so nothing to wait on
-          // yet — the user clicks "在应用内登录" below.
-          setStatus('点下面的按钮，在弹出的窗口里登录，授权信息会自动同步回来。')
-        } else {
-          // Cursor deep-control: open the external browser and poll.
-          setStatus('已打开授权页，请在浏览器完成登录…')
-          setWaiting(true)
-          await api.oauth.openUrl(started.authUrl).catch(() => undefined)
-          const input = await api.oauth.wait(started.loginId)
-          if (dead || !input) return
-          setWaiting(false)
-          setStatus('授权成功')
-          onDone(input)
+        if (started.needsCallback && !started.serverBound) {
+          // Local callback port is blocked (Docker/WSL reserved 1455 etc.):
+          // the in-app capture window is the primary path — wait for the click.
+          setStatus('本机回调端口被占用，点下面在应用内窗口登录，会自动同步。')
+          return
         }
+        // Cursor deep-control, or a callback platform whose local server bound:
+        // open the system browser and let the listening server auto-complete.
+        setStatus('已打开授权页，请在浏览器完成登录，成功后自动同步…')
+        setWaiting(true)
+        await api.oauth.openUrl(started.authUrl).catch(() => undefined)
+        const input = await api.oauth.wait(started.loginId)
+        if (dead || !input) return
+        setWaiting(false)
+        setStatus('授权成功')
+        onDone(input)
       } catch (e) {
         if (dead) return
         setWaiting(false)
@@ -149,14 +149,29 @@ function PkceAuthPanel({
     )
   }
 
+  const browserPrimary = !!session?.serverBound
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        点下面的按钮，在弹出的窗口里完成 {name} 登录授权，成功后自动同步账号信息——不用手动粘贴任何东西。
-      </p>
-      <Button type="button" className="w-full" size="lg" onClick={() => void capture()} disabled={!session || busy}>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />} 在应用内登录并授权
-      </Button>
+      {browserPrimary ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            已打开浏览器完成 {name} 授权（Google / GitHub / 账密均可）。登录成功后会<b>自动同步</b>回来，无需手动操作。
+          </p>
+          <Button type="button" className="w-full" size="lg" onClick={() => void openBrowser()} disabled={!session}>
+            <Globe className="h-4 w-4" /> 重新打开浏览器授权页
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            本机回调端口被占用（Docker / WSL 常见）。点下面在弹出的窗口里完成 {name} 登录，成功后自动同步——不用手动粘贴。
+          </p>
+          <Button type="button" className="w-full" size="lg" onClick={() => void capture()} disabled={!session || busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />} 在应用内登录并授权
+          </Button>
+        </>
+      )}
 
       <div className="flex items-center gap-2 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
         {waiting ? (
@@ -172,10 +187,13 @@ function PkceAuthPanel({
         className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         onClick={() => setManualOpen((v) => !v)}
       >
-        用 Google / GitHub 登录被拦？或弹窗打不开？改用浏览器 + 手动回调
+        {browserPrimary ? '浏览器没自动跳回来？改用应用内窗口或手动回调' : '弹窗打不开 / 被拦？改用浏览器 + 手动回调'}
       </button>
       {manualOpen && (
         <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+          <Button type="button" variant="outline" className="w-full" onClick={() => void capture()} disabled={!session || busy}>
+            <Globe className="h-4 w-4" /> 在应用内窗口登录（拦截回调，自动同步）
+          </Button>
           <div className="flex gap-2">
             <Input readOnly value={session?.authUrl || ''} className="font-mono text-xs" />
             <Button type="button" variant="outline" size="icon" onClick={() => void copyUrl()} disabled={!session?.authUrl}>
