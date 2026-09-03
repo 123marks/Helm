@@ -404,7 +404,9 @@ function parseCallback(raw: string, fallbackBase: string): URL {
   if (!t) throw new Error('回调地址不能为空')
   if (t.startsWith('http://') || t.startsWith('https://')) return new URL(t)
   if (t.startsWith('/')) return new URL(t, fallbackBase)
-  return new URL(`${fallbackBase}${fallbackBase.includes('?') ? '&' : '?'}${t.replace(/^\?/, '')}`)
+  // A bare authorization code (no `=`, no query) — wrap it as `?code=…`.
+  const query = t.includes('=') ? t.replace(/^\?/, '') : `code=${encodeURIComponent(t)}`
+  return new URL(`${fallbackBase}${fallbackBase.includes('?') ? '&' : '?'}${query}`)
 }
 
 async function pollCursor(session: Session): Promise<AccountInput | null> {
@@ -528,7 +530,13 @@ async function completeKiro(session: Session, url: URL): Promise<AccountInput> {
   const data = (parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed) as Record<string, unknown>
   const refresh = String(data.refreshToken || data.refresh_token || '')
   if (!refresh) fail(session, 'Kiro 未返回 refreshToken')
-  const email = String(data.email || data.userEmail || '')
+  // Social sign-in returns the email only inside the id_token claims.
+  const idToken = String(data.idToken || data.id_token || data.idTokenJwt || data.id_token_jwt || '')
+  let email = String(data.email || data.userEmail || '')
+  if (!email && idToken) {
+    const claims = jwtPayload(idToken)
+    email = String(claims?.email || claims?.preferred_username || '')
+  }
   return finish(
     session,
     input('kiro', refresh, {
@@ -538,6 +546,7 @@ async function completeKiro(session: Session, url: URL): Promise<AccountInput> {
         clientId: String(data.clientId || data.client_id || ''),
         clientSecret: String(data.clientSecret || data.client_secret || ''),
         accessToken: String(data.accessToken || data.access_token || ''),
+        idToken,
         provider: String(data.provider || data.loginProvider || loginOption)
       }
     })

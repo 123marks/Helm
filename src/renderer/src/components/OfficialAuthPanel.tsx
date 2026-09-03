@@ -99,6 +99,8 @@ function PkceAuthPanel({
     }
   }
 
+  const bindBlocked = /端口|EACCES|EADDRINUSE|回调服务/.test(status)
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -112,33 +114,43 @@ function PkceAuthPanel({
             <Copy className="h-4 w-4" />
           </Button>
         </div>
-        {session && (
-          <p className="text-[11px] text-muted-foreground">
-            授权有效期: {session.expiresIn}s；轮询间隔: {session.intervalSeconds}s
-          </p>
-        )}
       </div>
       <Button type="button" className="w-full" size="lg" onClick={() => void openBrowser()} disabled={!session?.authUrl}>
         <Globe className="h-4 w-4" /> 在浏览器中打开
       </Button>
       {session?.needsCallback && (
-        <div className="space-y-1.5">
-          <Label>手动输入回调地址</Label>
+        <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+          <Label className="text-sm">授权后把回调地址粘回来</Label>
+          <ol className="list-decimal space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+            <li>点上面「在浏览器中打开」，完成登录授权</li>
+            <li>浏览器会跳到一个打不开的 <span className="font-mono">localhost:1455</span> 页面（<b>这是正常的</b>）</li>
+            <li>复制该页面地址栏里 <span className="font-mono">http://localhost:1455/...code=...</span> 整段</li>
+            <li>粘到下面，点「我已授权，继续」</li>
+          </ol>
           <div className="flex gap-2">
             <Input
               value={callback}
               onChange={(e) => setCallback(e.target.value)}
-              placeholder="粘贴完整回调地址，例如：http://localhost:1455/auth/callback?code=…"
+              placeholder="粘贴回调地址或 code，例如：http://localhost:1455/auth/callback?code=ac_…"
               className="font-mono text-xs"
+              autoFocus={bindBlocked}
             />
-            <Button type="button" variant="outline" onClick={() => void submit()} disabled={busy || !callback.trim()}>
-              <Check className="h-4 w-4" /> 我已授权，继续
+            <Button type="button" onClick={() => void submit()} disabled={busy || !callback.trim()}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} 我已授权，继续
             </Button>
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
-        {waiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
+      <div
+        className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
+          bindBlocked ? 'border-warning/40 bg-warning/10 text-warning' : 'bg-secondary/40'
+        }`}
+      >
+        {waiting ? (
+          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+        ) : (
+          <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
         <span>{status}</span>
       </div>
     </div>

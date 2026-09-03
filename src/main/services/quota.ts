@@ -810,8 +810,28 @@ async function fetchKiro(accountId: string): Promise<AccountQuota> {
   const access = String(data.accessToken || data.access_token || '')
   if (!access) throw new Error(lastErr)
   const nextRefresh = String(data.refreshToken || data.refresh_token || '')
+
+  // Kiro's email lives in the id_token's claims (the Cognito access token has
+  // none). Decode it from the refresh response, or a previously stored one.
+  const idToken = String(
+    data.idToken || data.id_token || data.idTokenJwt || data.id_token_jwt || acc.customFields.idToken || ''
+  )
+  let email = String(data.email || data.userEmail || '')
+  if (!email && idToken) {
+    const claims = jwtPayload(idToken)
+    email = String(claims?.email || claims?.preferred_username || claims?.['cognito:username'] || '')
+  }
+  if (!looksLikeEmail(email)) email = ''
+
+  const cfPatch: Record<string, string> = {}
+  if (idToken && idToken !== acc.customFields.idToken) cfPatch.idToken = idToken
   if (nextRefresh && nextRefresh !== refreshToken) {
-    updateAccount(accountId, { refreshToken: nextRefresh })
+    updateAccount(accountId, {
+      refreshToken: nextRefresh,
+      ...(Object.keys(cfPatch).length ? { customFields: { ...acc.customFields, ...cfPatch } } : {})
+    })
+  } else if (Object.keys(cfPatch).length) {
+    updateAccount(accountId, { customFields: { ...acc.customFields, ...cfPatch } })
   }
 
   const auth = {
@@ -828,10 +848,12 @@ async function fetchKiro(accountId: string): Promise<AccountQuota> {
         auth
       )
     )
-    return parseKiroUsage(usage)
+    const q = parseKiroUsage(usage)
+    if (email) q.email = email
+    return q
   } catch {
     const exp = num(data.expiresIn)
-    return ok({ plan: 'Kiro · Token 有效', expiresAt: exp ? Date.now() + exp * 1000 : null })
+    return ok({ plan: 'Kiro · Token 有效', email, expiresAt: exp ? Date.now() + exp * 1000 : null })
   }
 }
 

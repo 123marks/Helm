@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3
+
+- **Kiro 授权后显示邮箱**：社交登录的邮箱藏在 id_token 里（Cognito access token 没有），之前解析不到只显示「已授权（待同步）」。现在授权与刷新时都会解 id_token 的 email 声明并写回账号；id_token 一并存起来供后续刷新兜底。已有的旧号刷新一次即可显示（拿不到就重新授权一次，之后就正常）。
+- **OpenAI 手动回调更清晰**：1455 端口被系统占用时无法自动回调。授权面板改为分步引导（浏览器授权 → 复制打不开的 localhost:1455 地址 → 粘回），支持粘贴完整地址或只粘 code，端口被占用时自动聚焦输入框。
+
 ## 0.4.2
 
 - **修复 Kiro（Google / GitHub 社交登录）额度 401**：社交登录账号的令牌要走 `prod.us-east-1.auth.desktop.kiro.dev/refreshToken`（`{refreshToken}`），而不是 AWS OIDC 端点——之前一律走 AWS OIDC 所以社交号必 401。现在按账号类型选端点（Builder ID 用 AWS OIDC + clientId/clientSecret，社交用 Kiro 桌面端），并互相兜底，两种导入方式都能恢复。
