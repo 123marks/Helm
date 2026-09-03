@@ -4,6 +4,7 @@ import type { Platform } from '@shared/types'
 import {
   cancelOfficialOAuth,
   officialOAuthSnapshot,
+  openAndCaptureOAuth,
   startOfficialOAuth,
   submitOfficialOAuthCallback,
   waitOfficialOAuth
@@ -16,6 +17,7 @@ export function registerOAuthIpc(): void {
   ipcMain.handle(IPC.oauth.submitCallback, (_e, loginId: string, url: string) =>
     submitOfficialOAuthCallback(loginId, url)
   )
+  ipcMain.handle(IPC.oauth.openCapture, (_e, loginId: string) => openAndCaptureOAuth(loginId))
   ipcMain.handle(IPC.oauth.cancel, (_e, loginId?: string) => {
     cancelOfficialOAuth(loginId)
   })

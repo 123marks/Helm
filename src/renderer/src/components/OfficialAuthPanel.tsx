@@ -36,12 +36,14 @@ function PkceAuthPanel({
   const [waiting, setWaiting] = useState(false)
   const [callback, setCallback] = useState('')
   const [busy, setBusy] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const name = platformMeta(platform).label
 
   useEffect(() => {
     let dead = false
     setSession(null)
     setCallback('')
+    setManualOpen(false)
     setWaiting(false)
     setStatus('正在创建授权会话…')
     void (async () => {
@@ -52,13 +54,22 @@ function PkceAuthPanel({
           return
         }
         setSession(started)
-        setStatus('等待授权完成…')
-        setWaiting(true)
-        const input = await api.oauth.wait(started.loginId)
-        if (dead || !input) return
-        setWaiting(false)
-        setStatus('授权成功')
-        onDone(input)
+        if (started.needsCallback) {
+          // Callback platforms (OpenAI / Kiro / Windsurf / Antigravity): we
+          // capture the redirect inside an in-app window, so nothing to wait on
+          // yet — the user clicks "在应用内登录" below.
+          setStatus('点下面的按钮，在弹出的窗口里登录，授权信息会自动同步回来。')
+        } else {
+          // Cursor deep-control: open the external browser and poll.
+          setStatus('已打开授权页，请在浏览器完成登录…')
+          setWaiting(true)
+          await api.oauth.openUrl(started.authUrl).catch(() => undefined)
+          const input = await api.oauth.wait(started.loginId)
+          if (dead || !input) return
+          setWaiting(false)
+          setStatus('授权成功')
+          onDone(input)
+        }
       } catch (e) {
         if (dead) return
         setWaiting(false)
@@ -70,6 +81,28 @@ function PkceAuthPanel({
       void api.oauth.cancel()
     }
   }, [platform, onDone])
+
+  const capture = async (): Promise<void> => {
+    if (!session) return
+    setBusy(true)
+    setWaiting(true)
+    setStatus('请在弹出的窗口里完成登录…')
+    try {
+      const input = await api.oauth.openCapture(session.loginId)
+      if (!input) {
+        setStatus('已取消授权')
+        return
+      }
+      setStatus('授权成功，正在同步账号信息…')
+      onDone(input)
+    } catch (e) {
+      toast.error((e as Error).message)
+      setStatus((e as Error).message)
+    } finally {
+      setBusy(false)
+      setWaiting(false)
+    }
+  }
 
   const openBrowser = async (): Promise<void> => {
     if (!session?.authUrl) return
@@ -88,7 +121,6 @@ function PkceAuthPanel({
     setBusy(true)
     try {
       const input = await api.oauth.submitCallback(session.loginId, callback.trim())
-      setWaiting(false)
       setStatus('授权成功')
       onDone(input)
     } catch (e) {
@@ -99,60 +131,78 @@ function PkceAuthPanel({
     }
   }
 
-  const bindBlocked = /端口|EACCES|EADDRINUSE|回调服务/.test(status)
+  // Cursor (deep-control poll): keep the external-browser + poll experience.
+  if (session && !session.needsCallback) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          已在浏览器打开 {name} 授权页。用 Google / GitHub / 账密完成登录后，会自动同步回来。
+        </p>
+        <Button type="button" className="w-full" size="lg" onClick={() => void openBrowser()}>
+          <Globe className="h-4 w-4" /> 重新打开授权页
+        </Button>
+        <div className="flex items-center gap-2 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
+          {waiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
+          <span>{status}</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        点击下方按钮，在浏览器中完成 {name} 授权登录（Google / GitHub / 官方账号均可）。
+        点下面的按钮，在弹出的窗口里完成 {name} 登录授权，成功后自动同步账号信息——不用手动粘贴任何东西。
       </p>
-      <div className="space-y-1.5">
-        <Label>授权链接</Label>
-        <div className="flex gap-2">
-          <Input readOnly value={session?.authUrl || ''} className="font-mono text-xs" />
-          <Button type="button" variant="outline" size="icon" onClick={() => void copyUrl()} disabled={!session?.authUrl}>
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      <Button type="button" className="w-full" size="lg" onClick={() => void openBrowser()} disabled={!session?.authUrl}>
-        <Globe className="h-4 w-4" /> 在浏览器中打开
+      <Button type="button" className="w-full" size="lg" onClick={() => void capture()} disabled={!session || busy}>
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />} 在应用内登录并授权
       </Button>
-      {session?.needsCallback && (
+
+      <div className="flex items-center gap-2 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
+        {waiting ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        ) : (
+          <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        <span>{status}</span>
+      </div>
+
+      <button
+        type="button"
+        className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        onClick={() => setManualOpen((v) => !v)}
+      >
+        用 Google / GitHub 登录被拦？或弹窗打不开？改用浏览器 + 手动回调
+      </button>
+      {manualOpen && (
         <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
-          <Label className="text-sm">授权后把回调地址粘回来</Label>
+          <div className="flex gap-2">
+            <Input readOnly value={session?.authUrl || ''} className="font-mono text-xs" />
+            <Button type="button" variant="outline" size="icon" onClick={() => void copyUrl()} disabled={!session?.authUrl}>
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void openBrowser()} disabled={!session?.authUrl}>
+              <Globe className="h-4 w-4" /> 打开
+            </Button>
+          </div>
           <ol className="list-decimal space-y-0.5 pl-4 text-[11px] text-muted-foreground">
-            <li>点上面「在浏览器中打开」，完成登录授权</li>
-            <li>浏览器会跳到一个打不开的 <span className="font-mono">localhost:1455</span> 页面（<b>这是正常的</b>）</li>
-            <li>复制该页面地址栏里 <span className="font-mono">http://localhost:1455/...code=...</span> 整段</li>
-            <li>粘到下面，点「我已授权，继续」</li>
+            <li>在浏览器完成登录授权</li>
+            <li>浏览器会跳到打不开的 <span className="font-mono">localhost</span> 回调页（正常）</li>
+            <li>复制地址栏里带 <span className="font-mono">code=</span> 的整段，粘到下面</li>
           </ol>
           <div className="flex gap-2">
             <Input
               value={callback}
               onChange={(e) => setCallback(e.target.value)}
-              placeholder="粘贴回调地址或 code，例如：http://localhost:1455/auth/callback?code=ac_…"
+              placeholder="粘贴回调地址或 code"
               className="font-mono text-xs"
-              autoFocus={bindBlocked}
             />
-            <Button type="button" onClick={() => void submit()} disabled={busy || !callback.trim()}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} 我已授权，继续
+            <Button type="button" variant="outline" onClick={() => void submit()} disabled={busy || !callback.trim()}>
+              <Check className="h-4 w-4" /> 继续
             </Button>
           </div>
         </div>
       )}
-      <div
-        className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
-          bindBlocked ? 'border-warning/40 bg-warning/10 text-warning' : 'bg-secondary/40'
-        }`}
-      >
-        {waiting ? (
-          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-        ) : (
-          <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <span>{status}</span>
-      </div>
     </div>
   )
 }

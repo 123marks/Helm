@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
+import { BrowserWindow } from 'electron'
 import type { AccountInput, OfficialOAuthStart, Platform } from '@shared/types'
 import { jwtPayload } from '@shared/tokenImport'
 import { hintToAccountFields, lookupCursorIdentity } from './identity'
@@ -18,10 +19,16 @@ type Session = {
   state?: string
   redirectUri?: string
   server?: Server
+  captureWindow?: BrowserWindow
   result?: AccountInput
   error?: string
   cancelled?: boolean
 }
+
+// A recent desktop Chrome UA so the embedded auth window isn't treated as an
+// unknown/insecure browser by the login pages.
+const CAPTURE_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
 
 const sessions = new Map<string, Session>()
 
@@ -378,15 +385,82 @@ export async function waitOfficialOAuth(loginId: string): Promise<AccountInput |
   throw new Error('等待授权超时，请重试')
 }
 
+function completeByPlatform(session: Session, url: URL): Promise<AccountInput> {
+  if (session.platform === 'openai') return completeOpenAI(session, url)
+  if (session.platform === 'kiro') return completeKiro(session, url)
+  if (session.platform === 'windsurf') return Promise.resolve(completeWindsurf(session, url))
+  if (session.platform === 'antigravity') return completeAntigravity(session, url)
+  throw new Error('该平台不需要手动回调')
+}
+
 export async function submitOfficialOAuthCallback(loginId: string, raw: string): Promise<AccountInput> {
   const session = sessions.get(loginId)
   if (!session) throw new Error('没有进行中的授权会话')
   const url = parseCallback(raw, session.redirectUri || 'http://localhost/oauth/callback')
-  if (session.platform === 'openai') return completeOpenAI(session, url)
-  if (session.platform === 'kiro') return completeKiro(session, url)
-  if (session.platform === 'windsurf') return completeWindsurf(session, url)
-  if (session.platform === 'antigravity') return completeAntigravity(session, url)
-  throw new Error('该平台不需要手动回调')
+  return completeByPlatform(session, url)
+}
+
+/**
+ * Open the auth page in an in-app window we control and intercept the redirect
+ * to the (localhost) callback — capturing the code without binding any port or
+ * asking the user to paste anything. This is what makes authorization "just
+ * sync" the way Cockpit does. Falls back to the poll/wait flow when there is no
+ * callback URL to intercept (e.g. Cursor's deep-control poll).
+ */
+export async function openAndCaptureOAuth(loginId: string): Promise<AccountInput | null> {
+  const session = sessions.get(loginId)
+  if (!session) throw new Error('没有进行中的授权会话')
+  if (!session.needsCallback || !session.redirectUri) {
+    return waitOfficialOAuth(loginId)
+  }
+  const prefix = session.redirectUri
+  return new Promise<AccountInput>((resolve, reject) => {
+    const win = new BrowserWindow({
+      width: 520,
+      height: 760,
+      title: `${session.platform} 授权`,
+      autoHideMenuBar: true,
+      webPreferences: {
+        partition: `oauth:${loginId}`,
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+    session.captureWindow = win
+    let settled = false
+    const done = (fn: () => void): void => {
+      if (settled) return
+      settled = true
+      fn()
+      if (!win.isDestroyed()) win.destroy()
+      session.captureWindow = undefined
+    }
+    const onHit = (raw: string): boolean => {
+      if (!raw.startsWith(prefix)) return false
+      void completeByPlatform(session, new URL(raw))
+        .then((input) => done(() => resolve(input)))
+        .catch((e: Error) => done(() => reject(e)))
+      return true
+    }
+    win.webContents.on('will-redirect', (e, u) => {
+      if (onHit(u)) e.preventDefault()
+    })
+    win.webContents.on('will-navigate', (e, u) => {
+      if (onHit(u)) e.preventDefault()
+    })
+    win.webContents.on('did-redirect-navigation', (_e, u) => {
+      onHit(u)
+    })
+    win.on('closed', () => {
+      if (!settled) {
+        settled = true
+        session.captureWindow = undefined
+        reject(new Error('已取消授权（登录窗口被关闭）'))
+      }
+    })
+    win.webContents.setUserAgent(CAPTURE_UA)
+    win.loadURL(session.authUrl).catch((e: Error) => done(() => reject(e)))
+  })
 }
 
 export function cancelOfficialOAuth(loginId?: string): void {
@@ -395,6 +469,8 @@ export function cancelOfficialOAuth(loginId?: string): void {
     s.cancelled = true
     s.server?.close()
     s.server = undefined
+    if (s.captureWindow && !s.captureWindow.isDestroyed()) s.captureWindow.destroy()
+    s.captureWindow = undefined
     if (!loginId || s.loginId === loginId) sessions.delete(s.loginId)
   }
 }

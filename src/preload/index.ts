@@ -104,6 +104,7 @@ const api: Api = {
     snapshot: (loginId) => ipcRenderer.invoke(IPC.oauth.snapshot, loginId),
     wait: (loginId) => ipcRenderer.invoke(IPC.oauth.wait, loginId),
     submitCallback: (loginId, url) => ipcRenderer.invoke(IPC.oauth.submitCallback, loginId, url),
+    openCapture: (loginId) => ipcRenderer.invoke(IPC.oauth.openCapture, loginId),
     cancel: (loginId) => ipcRenderer.invoke(IPC.oauth.cancel, loginId),
     openUrl: (url) => ipcRenderer.invoke(IPC.oauth.openUrl, url)
   },

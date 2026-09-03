@@ -123,6 +123,7 @@ export const IPC = {
     snapshot: 'oauth:snapshot',
     wait: 'oauth:wait',
     submitCallback: 'oauth:submit-callback',
+    openCapture: 'oauth:open-capture',
     cancel: 'oauth:cancel',
     openUrl: 'oauth:open-url'
   },

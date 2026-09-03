@@ -695,20 +695,29 @@ function parseKiroUsage(usage: Record<string, unknown>): AccountQuota {
     if (!Number.isFinite(resetAt)) resetAt = null
   }
 
+  const fmtCredit = (n: number): string => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  const remaining = limit ? Math.max(0, limit - used) : null
   const meters: QuotaMeter[] = [
-    meter('included', 'User Prompt credits', used, limit || null, 'credit', resetAt)
+    meter('included', 'User Prompt credits', used, limit || null, 'credit', resetAt, {
+      note: limit
+        ? `${fmtCredit(used)} / ${fmtCredit(limit)} · 剩 ${fmtCredit(remaining ?? 0)}`
+        : used
+          ? `已用 ${fmtCredit(used)}`
+          : undefined,
+      hint: limit ? undefined : '免费档按请求次数限制'
+    })
   ]
   const ft = asRec(credit.freeTrialInfo)
   if (String(ft.freeTrialStatus || ft.status) === 'ACTIVE') {
+    const ftUsed = num(ft.currentUsageWithPrecision ?? ft.currentUsage)
+    const ftLimit = num(ft.usageLimitWithPrecision ?? ft.usageLimit)
     meters.push(
-      meter(
-        'premium',
-        '试用额度',
-        num(ft.currentUsageWithPrecision ?? ft.currentUsage),
-        num(ft.usageLimitWithPrecision ?? ft.usageLimit),
-        'credit',
-        resetAt
-      )
+      meter('premium', '试用额度', ftUsed, ftLimit, 'credit', resetAt, {
+        note:
+          ftUsed != null && ftLimit != null
+            ? `${fmtCredit(ftUsed)} / ${fmtCredit(ftLimit)} · 剩 ${fmtCredit(Math.max(0, ftLimit - ftUsed))}`
+            : undefined
+      })
     )
   }
   const bonuses = (Array.isArray(credit.bonuses) ? credit.bonuses : []) as Record<string, unknown>[]
@@ -722,7 +731,13 @@ function parseKiroUsage(usage: Record<string, unknown>): AccountQuota {
     bonusLimit += num(b.usageLimitWithPrecision ?? b.usageLimit ?? b.limit) ?? 0
   }
   if (hasBonus) {
-    meters.push(meter('ondemand', '奖励额度', bonusUsed, bonusLimit || null, 'credit', resetAt))
+    meters.push(
+      meter('ondemand', '奖励额度', bonusUsed, bonusLimit || null, 'credit', resetAt, {
+        note: bonusLimit
+          ? `${fmtCredit(bonusUsed)} / ${fmtCredit(bonusLimit)} · 剩 ${fmtCredit(Math.max(0, bonusLimit - bonusUsed))}`
+          : undefined
+      })
+    )
   }
 
   return ok({

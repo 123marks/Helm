@@ -585,6 +585,8 @@ export interface Api {
     /** Null when the user cancelled the dialog before authorizing. */
     wait(loginId: string): Promise<AccountInput | null>
     submitCallback(loginId: string, url: string): Promise<AccountInput>
+    /** Open the auth page in an in-app window and auto-capture the callback. Null if cancelled. */
+    openCapture(loginId: string): Promise<AccountInput | null>
     cancel(loginId?: string): Promise<void>
     openUrl(url: string): Promise<void>
   }
