@@ -736,6 +736,45 @@ function parseKiroUsage(usage: Record<string, unknown>): AccountQuota {
   })
 }
 
+const KIRO_UA = 'KiroIDE/0.12.155'
+const KIRO_SOCIAL_REFRESH = 'https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken'
+const KIRO_OIDC_REFRESH = 'https://oidc.us-east-1.amazonaws.com/token'
+
+/** Kiro social sign-in (Google / GitHub): POST {refreshToken} to the desktop auth service. */
+async function kiroRefreshSocial(refreshToken: string): Promise<Record<string, unknown>> {
+  const res = await fetch(KIRO_SOCIAL_REFRESH, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/plain, */*',
+      'user-agent': KIRO_UA
+    },
+    body: JSON.stringify({ refreshToken }),
+    signal: AbortSignal.timeout(20000)
+  })
+  if (!res.ok) throw new Error(`Kiro（社交登录）令牌刷新失败 HTTP ${res.status}`)
+  return asRec(await res.json().catch(() => ({})))
+}
+
+/** Kiro AWS Builder ID (IAM Identity Center) needs the device clientId + clientSecret. */
+async function kiroRefreshOidc(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string
+): Promise<Record<string, unknown>> {
+  const body: Record<string, string> = { grantType: 'refresh_token', refreshToken }
+  if (clientId) body.clientId = clientId
+  if (clientSecret) body.clientSecret = clientSecret
+  const res = await fetch(KIRO_OIDC_REFRESH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': KIRO_UA, 'x-amz-user-agent': KIRO_UA },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000)
+  })
+  if (!res.ok) throw new Error(`Kiro（Builder ID）令牌刷新失败 HTTP ${res.status}`)
+  return asRec(await res.json().catch(() => ({})))
+}
+
 async function fetchKiro(accountId: string): Promise<AccountQuota> {
   const acc = getAccount(accountId)
   if (!acc) throw new Error('账号不存在')
@@ -744,27 +783,36 @@ async function fetchKiro(accountId: string): Promise<AccountQuota> {
   if (!refreshToken) throw new Error('没有 Kiro Token。请粘贴 JSON / refreshToken，或点「官方授权」登录后再刷新')
   const clientId = acc.customFields.clientId || acc.mailboxClientId
   const clientSecret = acc.customFields.clientSecret
-  const body: Record<string, string> = { grantType: 'refresh_token', refreshToken }
-  if (clientId) body.clientId = clientId
-  if (clientSecret) body.clientSecret = clientSecret
-  const res = await fetch('https://oidc.us-east-1.amazonaws.com/token', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'user-agent': 'KiroIDE/0.12.155',
-      'x-amz-user-agent': 'KiroIDE/0.12.155'
-    },
-    body: JSON.stringify(body)
-  })
-  const text = await res.text()
-  if (!res.ok) throw new Error(`Kiro Token 刷新失败 HTTP ${res.status}`)
-  const data = asRec(JSON.parse(text))
+  const provider = (acc.customFields.provider || acc.oauthProvider || '').toLowerCase()
+  // Builder ID accounts carry a device clientId+clientSecret; social (Google /
+  // GitHub) accounts don't and must use the Kiro desktop refresh endpoint. Pick
+  // the right one, then fall back to the other so either import style recovers.
+  const preferBuilderId = !!clientSecret || provider.includes('builder') || provider.includes('aws')
+  const refreshers = preferBuilderId
+    ? [
+        () => kiroRefreshOidc(refreshToken, clientId, clientSecret),
+        () => kiroRefreshSocial(refreshToken)
+      ]
+    : [
+        () => kiroRefreshSocial(refreshToken),
+        () => kiroRefreshOidc(refreshToken, clientId, clientSecret)
+      ]
+  let data: Record<string, unknown> = {}
+  let lastErr = 'Kiro Token 刷新失败'
+  for (const attempt of refreshers) {
+    try {
+      data = await attempt()
+      if (data.accessToken || data.access_token) break
+    } catch (e) {
+      lastErr = (e as Error).message
+    }
+  }
   const access = String(data.accessToken || data.access_token || '')
+  if (!access) throw new Error(lastErr)
   const nextRefresh = String(data.refreshToken || data.refresh_token || '')
   if (nextRefresh && nextRefresh !== refreshToken) {
     updateAccount(accountId, { refreshToken: nextRefresh })
   }
-  if (!access) throw new Error('Kiro 未返回 accessToken')
 
   const auth = {
     authorization: `Bearer ${access}`,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- **修复 Kiro（Google / GitHub 社交登录）额度 401**：社交登录账号的令牌要走 `prod.us-east-1.auth.desktop.kiro.dev/refreshToken`（`{refreshToken}`），而不是 AWS OIDC 端点——之前一律走 AWS OIDC 所以社交号必 401。现在按账号类型选端点（Builder ID 用 AWS OIDC + clientId/clientSecret，社交用 Kiro 桌面端），并互相兜底，两种导入方式都能恢复。
+- **修复 OpenAI 授权 `EACCES 1455` 直接报错**：本机 1455 端口被系统保留（Hyper-V / WSL / Docker 常见）或被 Codex 占用时，`oauth:start` 不再整体失败；改为保留授权链接、给出明确指引，走「浏览器授权 + 手动粘贴回调地址」兜底完成。
+
 ## 0.4.1
 
 - **修复 Cursor 额度 401**：`usage-summary` 依赖的 WorkOS Cookie 里是短效 access JWT，过期即 401。现在按官方流程先用 refresh token 走 `api2.cursor.sh/oauth/token` 续期、用新 token 重建 `WorkosCursorSessionToken` Cookie（并带对齐的桌面 UA）再查额度；套餐档位改用 `full_stripe_profile` / `stripe_profile`（Bearer）读取。无 refresh token 的账号会给出明确「需重新官方授权」提示，而不是空白 401。（参考 chotgpt/cursor-usage-viewer）

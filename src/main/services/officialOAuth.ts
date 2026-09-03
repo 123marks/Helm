@@ -197,12 +197,17 @@ export async function startOfficialOAuth(platform: Platform): Promise<OfficialOA
         }
       })
     } catch (e) {
-      if (String((e as Error).message).includes('EADDRINUSE')) {
-        session.error =
-          '本机 1455 端口被占用。关掉 Codex/其他工具后重试，或把回调地址贴进来。'
-      } else {
-        throw e
-      }
+      // Binding 1455 can fail with EADDRINUSE (Codex running) or EACCES (the
+      // port sits in a Windows excluded/reserved range, common with Hyper-V /
+      // WSL / Docker). OpenAI's client has 1455 as a fixed redirect_uri, so we
+      // can't switch ports — but the manual-paste fallback still works, so we
+      // must NOT fail oauth:start. Keep the auth URL and guide the user.
+      const msg = String((e as Error).message || '')
+      session.error = /EADDRINUSE/.test(msg)
+        ? '本机 1455 端口被占用（可能是 Codex 正在运行）。可关掉后重试，或直接在浏览器完成授权，再把地址栏的回调地址粘到下方。'
+        : /EACCES/.test(msg)
+          ? '本机 1455 端口被系统保留（Hyper-V / WSL / Docker 常见）。请点「在浏览器中打开」完成授权，再把地址栏 http://localhost:1455/auth/callback?code=… 整段粘到下方「手动输入回调地址」。'
+          : `本机回调服务启动失败（${msg}）。请在浏览器完成授权后，把回调地址粘到下方。`
     }
     return { loginId, platform, authUrl, expiresIn: 300, intervalSeconds: 1, needsCallback: true }
   }
